@@ -1,0 +1,33 @@
+# Grocery Tracker Configuration
+# Copy to ~/.config/grocery-tracker/config.toml or ./config.toml
+
+[data]
+storage_dir = "~/grocery-tracker/data"
+backup_enabled = true
+backup_interval_days = 7
+
+[defaults]
+store = "Giant"
+category = "Other"
+
+[budget]
+monthly_limit = 500.00
+alert_threshold = 0.9  # Alert at 90% of budget
+
+[stores]
+# Store configurations
+[stores.giant]
+name = "Giant Food"
+typical_categories = ["Produce", "Dairy", "Meat", "Bakery"]
+
+[stores.traderjoes]
+name = "Trader Joe's"
+typical_categories = ["Produce", "Frozen", "Snacks"]
+
+[users.alice]
+dietary_restrictions = []
+favorite_stores = ["Giant", "Trader Joe's"]
+
+[users.bob]
+dietary_restrictions = ["vegetarian"]
+favorite_stores = ["Whole Foods", "Trader Joe's"]
