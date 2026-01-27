@@ -1,0 +1,322 @@
+"""Analytics and intelligence for Grocery Tracker."""
+
+from collections import defaultdict
+from datetime import date, timedelta
+
+from .data_store import DataStore
+from .models import (
+    CategorySpending,
+    FrequencyData,
+    OutOfStockRecord,
+    PriceComparison,
+    SpendingSummary,
+    Suggestion,
+)
+
+
+class Analytics:
+    """Provides spending analytics, frequency analysis, and smart suggestions."""
+
+    def __init__(self, data_store: DataStore | None = None):
+        self.data_store = data_store or DataStore()
+
+    def spending_summary(
+        self,
+        period: str = "monthly",
+        budget_limit: float | None = None,
+    ) -> SpendingSummary:
+        """Generate spending summary for a period.
+
+        Args:
+            period: "weekly", "monthly", or "yearly"
+            budget_limit: Optional budget limit to compare against
+
+        Returns:
+            SpendingSummary with breakdown
+        """
+        today = date.today()
+
+        if period == "weekly":
+            start_date = today - timedelta(days=today.weekday())
+        elif period == "yearly":
+            start_date = today.replace(month=1, day=1)
+        else:  # monthly
+            start_date = today.replace(day=1)
+
+        receipts = self.data_store.list_receipts()
+
+        # Filter to period
+        period_receipts = [
+            r
+            for r in receipts
+            if start_date <= r.transaction_date <= today
+        ]
+
+        total_spending = sum(r.total for r in period_receipts)
+        total_items = sum(len(r.line_items) for r in period_receipts)
+
+        # Category breakdown from price history and list items
+        category_totals: dict[str, float] = defaultdict(float)
+        category_counts: dict[str, int] = defaultdict(int)
+
+        for receipt in period_receipts:
+            for item in receipt.line_items:
+                # Try to find category from list
+                cat = self._guess_category(item.item_name)
+                category_totals[cat] += item.total_price
+                category_counts[cat] += 1
+
+        categories = []
+        for cat, total in sorted(category_totals.items(), key=lambda x: x[1], reverse=True):
+            pct = (total / total_spending * 100) if total_spending > 0 else 0
+            categories.append(
+                CategorySpending(
+                    category=cat,
+                    total=round(total, 2),
+                    percentage=round(pct, 1),
+                    item_count=category_counts[cat],
+                )
+            )
+
+        budget_remaining = None
+        budget_percentage = None
+        if budget_limit is not None and budget_limit > 0:
+            budget_remaining = round(budget_limit - total_spending, 2)
+            budget_percentage = round(total_spending / budget_limit * 100, 1)
+
+        return SpendingSummary(
+            period=period,
+            start_date=start_date,
+            end_date=today,
+            total_spending=round(total_spending, 2),
+            receipt_count=len(period_receipts),
+            item_count=total_items,
+            categories=categories,
+            budget_limit=budget_limit,
+            budget_remaining=budget_remaining,
+            budget_percentage=budget_percentage,
+        )
+
+    def price_comparison(self, item_name: str) -> PriceComparison | None:
+        """Compare prices for an item across stores.
+
+        Args:
+            item_name: Item to compare
+
+        Returns:
+            PriceComparison or None if no data
+        """
+        history = self.data_store.load_price_history()
+
+        if item_name not in history:
+            # Try case-insensitive match
+            for key in history:
+                if key.lower() == item_name.lower():
+                    item_name = key
+                    break
+            else:
+                return None
+
+        stores: dict[str, float] = {}
+        for store_name, ph in history[item_name].items():
+            if ph.current_price is not None:
+                stores[store_name] = ph.current_price
+
+        if not stores:
+            return None
+
+        cheapest_store = min(stores, key=stores.get)  # type: ignore[arg-type]
+        cheapest_price = stores[cheapest_store]
+        most_expensive = max(stores.values())
+        savings = round(most_expensive - cheapest_price, 2) if len(stores) > 1 else 0.0
+
+        return PriceComparison(
+            item_name=item_name,
+            stores=stores,
+            cheapest_store=cheapest_store,
+            cheapest_price=cheapest_price,
+            savings=savings,
+        )
+
+    def get_suggestions(self) -> list[Suggestion]:
+        """Generate smart shopping suggestions.
+
+        Returns:
+            List of Suggestion objects
+        """
+        suggestions: list[Suggestion] = []
+
+        # Restock suggestions from frequency data
+        frequency = self.data_store.load_frequency_data()
+        for item_name, freq in frequency.items():
+            avg = freq.average_days_between_purchases
+            days_since = freq.days_since_last_purchase
+            if avg is not None and days_since is not None:
+                if days_since >= avg:
+                    overdue = days_since - avg
+                    priority = "high" if overdue > avg * 0.5 else "medium"
+                    suggestions.append(
+                        Suggestion(
+                            type="restock",
+                            item_name=item_name,
+                            message=(
+                                f"Usually buy every {avg:.0f} days, "
+                                f"last purchase {days_since} days ago"
+                            ),
+                            priority=priority,
+                            data={
+                                "average_interval": avg,
+                                "days_since": days_since,
+                                "last_purchased": freq.last_purchased.isoformat()
+                                if freq.last_purchased
+                                else None,
+                            },
+                        )
+                    )
+
+        # Price alert suggestions
+        history = self.data_store.load_price_history()
+        for item_name, stores in history.items():
+            for store_name, ph in stores.items():
+                if len(ph.price_points) >= 3:
+                    current = ph.current_price
+                    avg = ph.average_price
+                    if current is not None and avg is not None:
+                        change_pct = (current - avg) / avg * 100
+                        if change_pct >= 15:
+                            suggestions.append(
+                                Suggestion(
+                                    type="price_alert",
+                                    item_name=item_name,
+                                    message=(
+                                        f"Price at {store_name} is "
+                                        f"${current:.2f} ({change_pct:+.0f}% vs avg ${avg:.2f})"
+                                    ),
+                                    priority="medium",
+                                    data={
+                                        "store": store_name,
+                                        "current_price": current,
+                                        "average_price": avg,
+                                        "change_percent": round(change_pct, 1),
+                                    },
+                                )
+                            )
+
+        # Out-of-stock pattern suggestions
+        oos_records = self.data_store.load_out_of_stock()
+        oos_counts: dict[tuple[str, str], int] = defaultdict(int)
+        for record in oos_records:
+            oos_counts[(record.item_name, record.store)] += 1
+
+        for (item_name, store), count in oos_counts.items():
+            if count >= 2:
+                suggestions.append(
+                    Suggestion(
+                        type="out_of_stock",
+                        item_name=item_name,
+                        message=f"Out of stock {count} times at {store}",
+                        priority="low",
+                        data={"store": store, "count": count},
+                    )
+                )
+
+        # Sort: high priority first
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        suggestions.sort(key=lambda s: priority_order.get(s.priority, 1))
+
+        return suggestions
+
+    def record_out_of_stock(
+        self,
+        item_name: str,
+        store: str,
+        substitution: str | None = None,
+        reported_by: str | None = None,
+    ) -> OutOfStockRecord:
+        """Record an item as out of stock.
+
+        Args:
+            item_name: Item that was out of stock
+            store: Store where it was out of stock
+            substitution: What was bought instead (if anything)
+            reported_by: Who reported it
+
+        Returns:
+            The created OutOfStockRecord
+        """
+        record = OutOfStockRecord(
+            item_name=item_name,
+            store=store,
+            substitution=substitution,
+            reported_by=reported_by,
+        )
+        self.data_store.add_out_of_stock(record)
+        return record
+
+    def get_frequency_summary(self, item_name: str) -> FrequencyData | None:
+        """Get purchase frequency data for an item.
+
+        Args:
+            item_name: Item name
+
+        Returns:
+            FrequencyData or None
+        """
+        return self.data_store.get_frequency(item_name)
+
+    def update_frequency_from_receipt(self, receipt) -> None:
+        """Update frequency data from a processed receipt.
+
+        Args:
+            receipt: A Receipt object
+        """
+        for item in receipt.line_items:
+            cat = self._guess_category(item.item_name)
+            self.data_store.update_frequency(
+                item_name=item.item_name,
+                purchase_date=receipt.transaction_date,
+                quantity=item.quantity,
+                store=receipt.store_name,
+                category=cat,
+            )
+
+    def _guess_category(self, item_name: str) -> str:
+        """Guess category from item name. Simple heuristic."""
+        name = item_name.lower()
+
+        produce = ["banana", "apple", "avocado", "tomato", "lettuce", "onion",
+                    "potato", "carrot", "pepper", "strawberr", "blueberr",
+                    "orange", "lemon", "lime", "grape", "mango", "pear",
+                    "celery", "broccoli", "spinach", "kale", "cucumber",
+                    "garlic", "ginger", "mushroom", "corn", "bean", "pea"]
+        dairy = ["milk", "cheese", "yogurt", "butter", "cream", "egg"]
+        meat = ["chicken", "beef", "pork", "turkey", "fish", "salmon",
+                "shrimp", "steak", "bacon", "sausage", "ham"]
+        bakery = ["bread", "bagel", "muffin", "roll", "cake", "donut",
+                  "croissant", "tortilla", "bun"]
+        frozen = ["frozen", "ice cream", "pizza"]
+        beverages = ["juice", "soda", "water", "coffee", "tea", "wine",
+                     "beer", "kombucha"]
+        snacks = ["chips", "cookie", "cracker", "popcorn", "pretzel",
+                  "candy", "chocolate", "granola bar", "nut"]
+        pantry = ["rice", "pasta", "sauce", "oil", "vinegar", "sugar",
+                  "flour", "salt", "spice", "cereal", "oat", "can",
+                  "soup", "broth"]
+
+        categories = [
+            (produce, "Produce"),
+            (dairy, "Dairy & Eggs"),
+            (meat, "Meat & Seafood"),
+            (bakery, "Bakery"),
+            (frozen, "Frozen Foods"),
+            (beverages, "Beverages"),
+            (snacks, "Snacks"),
+            (pantry, "Pantry & Canned Goods"),
+        ]
+
+        for keywords, category in categories:
+            for kw in keywords:
+                if kw in name:
+                    return category
+
+        return "Other"
