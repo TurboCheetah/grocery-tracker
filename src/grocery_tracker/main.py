@@ -9,8 +9,9 @@ from rich.console import Console
 
 from .analytics import Analytics
 from .data_store import DataStore
+from .inventory_manager import InventoryManager
 from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
-from .models import ItemStatus, Priority
+from .models import InventoryLocation, ItemStatus, Priority, WasteReason
 from .output_formatter import OutputFormatter
 from .receipt_processor import ReceiptProcessor
 
@@ -26,6 +27,7 @@ console = Console()
 formatter: OutputFormatter = OutputFormatter()
 data_store: DataStore | None = None
 list_manager: ListManager | None = None
+inventory_manager: InventoryManager | None = None
 
 
 def get_data_store() -> DataStore:
@@ -44,6 +46,14 @@ def get_list_manager() -> ListManager:
     return list_manager
 
 
+def get_inventory_manager() -> InventoryManager:
+    """Get or create InventoryManager instance."""
+    global inventory_manager
+    if inventory_manager is None:
+        inventory_manager = InventoryManager(get_data_store())
+    return inventory_manager
+
+
 @app.callback()
 def main(
     json_output: Annotated[
@@ -52,13 +62,14 @@ def main(
     data_dir: Annotated[Path | None, typer.Option("--data-dir", help="Data directory path")] = None,
 ) -> None:
     """Grocery Tracker CLI - Manage your grocery lists with intelligence."""
-    global formatter, data_store, list_manager
+    global formatter, data_store, list_manager, inventory_manager
 
     formatter = OutputFormatter(json_mode=json_output)
 
     if data_dir:
         data_store = DataStore(data_dir=data_dir)
         list_manager = ListManager(data_store)
+        inventory_manager = InventoryManager(data_store)
 
 
 @app.command()
@@ -541,6 +552,396 @@ def oos_list(
             output_data,
             f"Found {len(records)} out-of-stock records",
         )
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+# --- Phase 3: Inventory subcommand group ---
+inv_app = typer.Typer(help="Inventory management commands")
+app.add_typer(inv_app, name="inventory")
+
+
+@inv_app.command("add")
+def inv_add(
+    item: Annotated[str, typer.Argument(help="Item name")],
+    quantity: Annotated[float, typer.Option("--quantity", "-q", help="Quantity")] = 1.0,
+    unit: Annotated[str | None, typer.Option("--unit", "-u", help="Unit of measurement")] = None,
+    category: Annotated[str | None, typer.Option("--category", "-c", help="Category")] = None,
+    location: Annotated[
+        InventoryLocation, typer.Option("--location", "-l", help="Storage location")
+    ] = InventoryLocation.PANTRY,
+    expiration: Annotated[str | None, typer.Option("--expires", help="Expiration date (YYYY-MM-DD)")] = None,
+    threshold: Annotated[float, typer.Option("--threshold", help="Low stock threshold")] = 1.0,
+    added_by: Annotated[str | None, typer.Option("--by", help="Who is adding")] = None,
+) -> None:
+    """Add an item to household inventory."""
+    try:
+        from datetime import date as date_type
+
+        exp_date = date_type.fromisoformat(expiration) if expiration else None
+
+        mgr = get_inventory_manager()
+        result = mgr.add_item(
+            item_name=item,
+            quantity=quantity,
+            unit=unit,
+            category=category or "Other",
+            location=location,
+            expiration_date=exp_date,
+            low_stock_threshold=threshold,
+            added_by=added_by,
+        )
+
+        output_data = {
+            "success": True,
+            "message": f"Added {item} to inventory ({location.value})",
+            "data": {"inventory_item": result.model_dump()},
+        }
+        formatter.output(output_data, output_data["message"])
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@inv_app.command("remove")
+def inv_remove(
+    item_id: Annotated[str, typer.Argument(help="Item ID to remove")],
+) -> None:
+    """Remove an item from inventory."""
+    try:
+        mgr = get_inventory_manager()
+        removed = mgr.remove_item(item_id)
+        output_data = {
+            "success": True,
+            "message": f"Removed {removed.item_name} from inventory",
+            "data": {"inventory_item": removed.model_dump()},
+        }
+        formatter.output(output_data, output_data["message"])
+    except ValueError as e:
+        formatter.error(str(e), error_code="ITEM_NOT_FOUND")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@inv_app.command("list")
+def inv_list(
+    location: Annotated[
+        InventoryLocation | None, typer.Option("--location", "-l", help="Filter by location")
+    ] = None,
+    category: Annotated[str | None, typer.Option("--category", "-c", help="Filter by category")] = None,
+) -> None:
+    """View household inventory."""
+    try:
+        mgr = get_inventory_manager()
+        items = mgr.get_inventory(location=location, category=category)
+
+        output_data = {
+            "success": True,
+            "data": {
+                "inventory": [i.model_dump() for i in items],
+                "count": len(items),
+            },
+        }
+        formatter.output(output_data, f"{len(items)} items in inventory")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@inv_app.command("expiring")
+def inv_expiring(
+    days: Annotated[int, typer.Option("--days", "-d", help="Days to look ahead")] = 3,
+) -> None:
+    """View items expiring soon."""
+    try:
+        mgr = get_inventory_manager()
+        items = mgr.get_expiring_soon(days=days)
+
+        output_data = {
+            "success": True,
+            "data": {
+                "expiring": [i.model_dump() for i in items],
+                "count": len(items),
+                "days": days,
+            },
+        }
+        formatter.output(output_data, f"{len(items)} items expiring within {days} days")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@inv_app.command("low-stock")
+def inv_low_stock() -> None:
+    """View items that are low on stock."""
+    try:
+        mgr = get_inventory_manager()
+        items = mgr.get_low_stock()
+
+        output_data = {
+            "success": True,
+            "data": {
+                "low_stock": [i.model_dump() for i in items],
+                "count": len(items),
+            },
+        }
+        formatter.output(output_data, f"{len(items)} items are low on stock")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@inv_app.command("use")
+def inv_use(
+    item_id: Annotated[str, typer.Argument(help="Item ID")],
+    quantity: Annotated[float, typer.Option("--quantity", "-q", help="Amount to use")] = 1.0,
+) -> None:
+    """Use/consume inventory (reduce quantity)."""
+    try:
+        mgr = get_inventory_manager()
+        updated = mgr.update_quantity(item_id, delta=-quantity)
+
+        output_data = {
+            "success": True,
+            "message": f"Used {quantity} of {updated.item_name} (remaining: {updated.quantity})",
+            "data": {"inventory_item": updated.model_dump()},
+        }
+        formatter.output(output_data, output_data["message"])
+    except ValueError as e:
+        formatter.error(str(e), error_code="ITEM_NOT_FOUND")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+# --- Phase 3: Waste subcommand group ---
+waste_app = typer.Typer(help="Waste tracking commands")
+app.add_typer(waste_app, name="waste")
+
+
+@waste_app.command("log")
+def waste_log(
+    item: Annotated[str, typer.Argument(help="Item name that was wasted")],
+    quantity: Annotated[float, typer.Option("--quantity", "-q", help="Amount wasted")] = 1.0,
+    unit: Annotated[str | None, typer.Option("--unit", "-u", help="Unit")] = None,
+    reason: Annotated[
+        WasteReason, typer.Option("--reason", "-r", help="Reason for waste")
+    ] = WasteReason.OTHER,
+    cost: Annotated[float | None, typer.Option("--cost", help="Estimated cost")] = None,
+    logged_by: Annotated[str | None, typer.Option("--by", help="Who is logging")] = None,
+) -> None:
+    """Log a wasted item."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        record = analytics.log_waste(
+            item_name=item,
+            quantity=quantity,
+            unit=unit,
+            reason=reason,
+            estimated_cost=cost,
+            logged_by=logged_by,
+        )
+
+        output_data = {
+            "success": True,
+            "message": f"Logged waste: {item} ({reason.value})",
+            "data": {"record": record.model_dump()},
+        }
+        formatter.output(output_data, output_data["message"])
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@waste_app.command("list")
+def waste_list(
+    item: Annotated[str | None, typer.Option("--item", "-i", help="Filter by item")] = None,
+    reason: Annotated[WasteReason | None, typer.Option("--reason", "-r", help="Filter by reason")] = None,
+) -> None:
+    """List waste records."""
+    try:
+        ds = get_data_store()
+        records = ds.load_waste_log()
+
+        if item:
+            records = [r for r in records if r.item_name.lower() == item.lower()]
+        if reason:
+            records = [r for r in records if r.reason == reason]
+
+        output_data = {
+            "success": True,
+            "data": {
+                "waste_log": [r.model_dump() for r in records],
+                "count": len(records),
+            },
+        }
+        formatter.output(output_data, f"{len(records)} waste records")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@waste_app.command("summary")
+def waste_summary(
+    period: Annotated[
+        str, typer.Option("--period", "-p", help="Period: weekly, monthly, yearly")
+    ] = "monthly",
+) -> None:
+    """View waste summary and insights."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        summary = analytics.waste_summary(period=period)
+        insights = analytics.waste_insights()
+
+        output_data = {
+            "success": True,
+            "data": {
+                "waste_summary": summary,
+                "insights": insights,
+            },
+        }
+        formatter.output(output_data, f"Waste summary ({period})")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+# --- Phase 3: Budget subcommand group ---
+budget_app = typer.Typer(help="Budget tracking commands")
+app.add_typer(budget_app, name="budget")
+
+
+@budget_app.command("set")
+def budget_set(
+    limit: Annotated[float, typer.Argument(help="Monthly budget limit")],
+    month: Annotated[str | None, typer.Option("--month", help="Month (YYYY-MM)")] = None,
+) -> None:
+    """Set monthly budget."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        budget = analytics.set_budget(monthly_limit=limit, month=month)
+
+        output_data = {
+            "success": True,
+            "message": f"Budget set: ${limit:.2f}/month for {budget.month}",
+            "data": {"budget": budget.model_dump()},
+        }
+        formatter.output(output_data, output_data["message"])
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@budget_app.command("status")
+def budget_status(
+    month: Annotated[str | None, typer.Option("--month", help="Month (YYYY-MM)")] = None,
+) -> None:
+    """View budget status."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        budget = analytics.get_budget_status(month=month)
+
+        if budget is None:
+            formatter.warning("No budget set for this month")
+            return
+
+        output_data = {
+            "success": True,
+            "data": {"budget_status": budget.model_dump()},
+        }
+        formatter.output(output_data, f"Budget status for {budget.month}")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+# --- Phase 3: Preferences subcommand group ---
+prefs_app = typer.Typer(help="User preference commands")
+app.add_typer(prefs_app, name="preferences")
+
+
+@prefs_app.command("view")
+def prefs_view(
+    user: Annotated[str, typer.Argument(help="Username")],
+) -> None:
+    """View user preferences."""
+    try:
+        ds = get_data_store()
+        prefs = ds.get_user_preferences(user)
+
+        if prefs is None:
+            formatter.warning(f"No preferences found for '{user}'")
+            return
+
+        output_data = {
+            "success": True,
+            "data": {"preferences": prefs.model_dump()},
+        }
+        formatter.output(output_data, f"Preferences for {user}")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@prefs_app.command("set")
+def prefs_set(
+    user: Annotated[str, typer.Argument(help="Username")],
+    brand: Annotated[
+        list[str] | None, typer.Option("--brand", help="Brand preference (item:brand)")
+    ] = None,
+    dietary: Annotated[
+        list[str] | None, typer.Option("--dietary", help="Dietary restriction")
+    ] = None,
+    allergen: Annotated[
+        list[str] | None, typer.Option("--allergen", help="Allergen")
+    ] = None,
+    favorite: Annotated[
+        list[str] | None, typer.Option("--favorite", help="Favorite item")
+    ] = None,
+) -> None:
+    """Set user preferences."""
+    try:
+        from .models import UserPreferences
+
+        ds = get_data_store()
+        existing = ds.get_user_preferences(user)
+
+        if existing is None:
+            existing = UserPreferences(user=user)
+
+        if brand:
+            for b in brand:
+                if ":" in b:
+                    item, brand_name = b.split(":", 1)
+                    existing.brand_preferences[item.strip()] = brand_name.strip()
+
+        if dietary:
+            for d in dietary:
+                if d not in existing.dietary_restrictions:
+                    existing.dietary_restrictions.append(d)
+
+        if allergen:
+            for a in allergen:
+                if a not in existing.allergens:
+                    existing.allergens.append(a)
+
+        if favorite:
+            for f in favorite:
+                if f not in existing.favorite_items:
+                    existing.favorite_items.append(f)
+
+        ds.save_user_preferences(existing)
+
+        output_data = {
+            "success": True,
+            "message": f"Updated preferences for {user}",
+            "data": {"preferences": existing.model_dump()},
+        }
+        formatter.output(output_data, output_data["message"])
     except Exception as e:
         formatter.error(str(e))
         raise typer.Exit(code=1)

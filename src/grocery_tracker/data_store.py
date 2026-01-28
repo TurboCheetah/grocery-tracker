@@ -15,6 +15,13 @@ from .models import (
     FrequencyData,
     PurchaseRecord,
     OutOfStockRecord,
+    InventoryItem,
+    InventoryLocation,
+    WasteRecord,
+    WasteReason,
+    CategoryBudget,
+    BudgetTracking,
+    UserPreferences,
 )
 
 
@@ -50,7 +57,9 @@ def json_decoder(data: dict[str, Any]) -> dict[str, Any]:
                 except ValueError:
                     pass
             # Try to parse as date
-            elif key in ("transaction_date", "date", "recorded_date"):
+            elif key in ("transaction_date", "date", "recorded_date",
+                         "expiration_date", "opened_date", "purchased_date",
+                         "original_purchase_date", "waste_logged_date"):
                 try:
                     data[key] = date.fromisoformat(value)
                 except ValueError:
@@ -470,3 +479,205 @@ class DataStore:
         if store:
             filtered = [r for r in filtered if r.store.lower() == store.lower()]
         return filtered
+
+    # --- Inventory Operations ---
+
+    def _inventory_path(self) -> Path:
+        """Path to inventory file."""
+        return self.data_dir / "inventory.json"
+
+    def load_inventory(self) -> list[InventoryItem]:
+        """Load inventory items.
+
+        Returns:
+            List of InventoryItem
+        """
+        path = self._inventory_path()
+        if not path.exists():
+            return []
+
+        with open(path) as f:
+            data = json.load(f, object_hook=json_decoder)
+
+        return [InventoryItem(**item) for item in data]
+
+    def save_inventory(self, items: list[InventoryItem]) -> None:
+        """Save inventory items.
+
+        Args:
+            items: List of InventoryItem to save
+        """
+        path = self._inventory_path()
+
+        with open(path, "w") as f:
+            json.dump(
+                [i.model_dump() for i in items], f, cls=JSONEncoder, indent=2
+            )
+
+    # --- Waste Log Operations ---
+
+    def _waste_log_path(self) -> Path:
+        """Path to waste log file."""
+        return self.data_dir / "waste_log.json"
+
+    def load_waste_log(self) -> list[WasteRecord]:
+        """Load waste log records.
+
+        Returns:
+            List of WasteRecord
+        """
+        path = self._waste_log_path()
+        if not path.exists():
+            return []
+
+        with open(path) as f:
+            data = json.load(f, object_hook=json_decoder)
+
+        return [WasteRecord(**record) for record in data]
+
+    def save_waste_log(self, records: list[WasteRecord]) -> None:
+        """Save waste log records.
+
+        Args:
+            records: List of WasteRecord to save
+        """
+        path = self._waste_log_path()
+
+        with open(path, "w") as f:
+            json.dump(
+                [r.model_dump() for r in records], f, cls=JSONEncoder, indent=2
+            )
+
+    def add_waste_record(self, record: WasteRecord) -> UUID:
+        """Add a waste record.
+
+        Args:
+            record: WasteRecord to add
+
+        Returns:
+            Record ID
+        """
+        records = self.load_waste_log()
+        records.append(record)
+        self.save_waste_log(records)
+        return record.id
+
+    # --- Budget Operations ---
+
+    def _budget_path(self) -> Path:
+        """Path to budget file."""
+        return self.data_dir / "budget.json"
+
+    def load_budget(self, month: str | None = None) -> BudgetTracking | None:
+        """Load budget tracking for a month.
+
+        Args:
+            month: Month in YYYY-MM format. Defaults to current month.
+
+        Returns:
+            BudgetTracking or None
+        """
+        if month is None:
+            month = date.today().strftime("%Y-%m")
+
+        path = self._budget_path()
+        if not path.exists():
+            return None
+
+        with open(path) as f:
+            data = json.load(f)
+
+        budgets = data if isinstance(data, dict) else {}
+        if month not in budgets:
+            return None
+
+        budget_data = budgets[month]
+        cat_budgets = [
+            CategoryBudget(**cb) for cb in budget_data.get("category_budgets", [])
+        ]
+        return BudgetTracking(
+            month=month,
+            monthly_limit=budget_data.get("monthly_limit", 0.0),
+            category_budgets=cat_budgets,
+            total_spent=budget_data.get("total_spent", 0.0),
+        )
+
+    def save_budget(self, budget: BudgetTracking) -> None:
+        """Save budget tracking.
+
+        Args:
+            budget: BudgetTracking to save
+        """
+        path = self._budget_path()
+
+        if path.exists():
+            with open(path) as f:
+                all_budgets = json.load(f)
+        else:
+            all_budgets = {}
+
+        all_budgets[budget.month] = budget.model_dump()
+
+        with open(path, "w") as f:
+            json.dump(all_budgets, f, cls=JSONEncoder, indent=2)
+
+    # --- User Preferences Operations ---
+
+    def _preferences_path(self) -> Path:
+        """Path to user preferences file."""
+        return self.data_dir / "user_preferences.json"
+
+    def load_preferences(self) -> dict[str, UserPreferences]:
+        """Load all user preferences.
+
+        Returns:
+            Dict mapping username -> UserPreferences
+        """
+        path = self._preferences_path()
+        if not path.exists():
+            return {}
+
+        with open(path) as f:
+            data = json.load(f)
+
+        return {
+            name: UserPreferences(**prefs) for name, prefs in data.items()
+        }
+
+    def save_preferences(self, preferences: dict[str, UserPreferences]) -> None:
+        """Save user preferences.
+
+        Args:
+            preferences: Dict mapping username -> UserPreferences
+        """
+        path = self._preferences_path()
+
+        with open(path, "w") as f:
+            json.dump(
+                {name: prefs.model_dump() for name, prefs in preferences.items()},
+                f,
+                cls=JSONEncoder,
+                indent=2,
+            )
+
+    def get_user_preferences(self, user: str) -> UserPreferences | None:
+        """Get preferences for a specific user.
+
+        Args:
+            user: Username
+
+        Returns:
+            UserPreferences or None
+        """
+        prefs = self.load_preferences()
+        return prefs.get(user)
+
+    def save_user_preferences(self, prefs: UserPreferences) -> None:
+        """Save preferences for a user.
+
+        Args:
+            prefs: UserPreferences to save
+        """
+        all_prefs = self.load_preferences()
+        all_prefs[prefs.user] = prefs
+        self.save_preferences(all_prefs)
