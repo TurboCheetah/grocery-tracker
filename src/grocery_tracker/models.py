@@ -278,3 +278,114 @@ class Suggestion(BaseModel):
     message: str
     priority: str = "medium"  # high, medium, low
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Phase 3 Models ---
+
+
+class InventoryLocation(str, Enum):
+    """Storage locations for inventory items."""
+
+    PANTRY = "pantry"
+    FRIDGE = "fridge"
+    FREEZER = "freezer"
+
+
+class WasteReason(str, Enum):
+    """Reasons for food waste."""
+
+    SPOILED = "spoiled"
+    NEVER_USED = "never_used"
+    OVERRIPE = "overripe"
+    OTHER = "other"
+
+
+class InventoryItem(BaseModel):
+    """A household inventory item."""
+
+    id: UUID = Field(default_factory=uuid4)
+    item_name: str
+    category: str = Category.OTHER.value
+    quantity: float = 1.0
+    unit: str | None = None
+    location: InventoryLocation = InventoryLocation.PANTRY
+    expiration_date: date | None = None
+    opened_date: date | None = None
+    low_stock_threshold: float = 1.0
+    purchased_date: date = Field(default_factory=date.today)
+    receipt_id: UUID | None = None
+    added_by: str | None = None
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if item is expired."""
+        if self.expiration_date is None:
+            return False
+        return self.expiration_date < date.today()
+
+    @property
+    def is_low_stock(self) -> bool:
+        """Check if item is below threshold."""
+        return self.quantity <= self.low_stock_threshold
+
+    @property
+    def days_until_expiration(self) -> int | None:
+        """Days until expiration."""
+        if self.expiration_date is None:
+            return None
+        return (self.expiration_date - date.today()).days
+
+
+class WasteRecord(BaseModel):
+    """A food waste log entry."""
+
+    id: UUID = Field(default_factory=uuid4)
+    item_name: str
+    quantity: float = 1.0
+    unit: str | None = None
+    original_purchase_date: date | None = None
+    waste_logged_date: date = Field(default_factory=date.today)
+    reason: WasteReason = WasteReason.OTHER
+    estimated_cost: float | None = None
+    logged_by: str | None = None
+
+
+class CategoryBudget(BaseModel):
+    """Budget allocation for a category."""
+
+    category: str
+    limit: float
+    spent: float = 0.0
+
+    @property
+    def remaining(self) -> float:
+        return round(self.limit - self.spent, 2)
+
+    @property
+    def percentage_used(self) -> float:
+        if self.limit <= 0:
+            return 0.0
+        return round(self.spent / self.limit * 100, 1)
+
+    @property
+    def is_over_budget(self) -> bool:
+        return self.spent > self.limit
+
+
+class BudgetTracking(BaseModel):
+    """Monthly budget tracking."""
+
+    month: str  # "YYYY-MM" format
+    monthly_limit: float = 0.0
+    category_budgets: list[CategoryBudget] = Field(default_factory=list)
+    total_spent: float = 0.0
+
+    @property
+    def total_remaining(self) -> float:
+        return round(self.monthly_limit - self.total_spent, 2)
+
+    @property
+    def total_percentage_used(self) -> float:
+        if self.monthly_limit <= 0:
+            return 0.0
+        return round(self.total_spent / self.monthly_limit * 100, 1)
