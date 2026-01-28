@@ -4,11 +4,15 @@ from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from grocery_tracker.models import (
+    BudgetTracking,
     Category,
+    CategoryBudget,
     CategorySpending,
     FrequencyData,
     GroceryItem,
     GroceryList,
+    InventoryItem,
+    InventoryLocation,
     ItemStatus,
     LineItem,
     OutOfStockRecord,
@@ -20,6 +24,8 @@ from grocery_tracker.models import (
     Receipt,
     SpendingSummary,
     Suggestion,
+    WasteReason,
+    WasteRecord,
 )
 
 
@@ -379,3 +385,167 @@ class TestSuggestion:
             data={"current": 4.99, "average": 3.99},
         )
         assert s.data["current"] == 4.99
+
+
+# --- Phase 3 Model Tests ---
+
+
+class TestInventoryLocation:
+    """Tests for InventoryLocation enum."""
+
+    def test_values(self):
+        assert InventoryLocation.PANTRY.value == "pantry"
+        assert InventoryLocation.FRIDGE.value == "fridge"
+        assert InventoryLocation.FREEZER.value == "freezer"
+
+
+class TestWasteReason:
+    """Tests for WasteReason enum."""
+
+    def test_values(self):
+        assert WasteReason.SPOILED.value == "spoiled"
+        assert WasteReason.NEVER_USED.value == "never_used"
+        assert WasteReason.OVERRIPE.value == "overripe"
+        assert WasteReason.OTHER.value == "other"
+
+
+class TestInventoryItem:
+    """Tests for InventoryItem model."""
+
+    def test_create_basic(self):
+        item = InventoryItem(item_name="Milk")
+        assert item.item_name == "Milk"
+        assert item.quantity == 1.0
+        assert item.location == InventoryLocation.PANTRY
+        assert isinstance(item.id, UUID)
+
+    def test_create_full(self):
+        exp = date.today() + timedelta(days=7)
+        item = InventoryItem(
+            item_name="Yogurt",
+            category="Dairy & Eggs",
+            quantity=3.0,
+            unit="cups",
+            location=InventoryLocation.FRIDGE,
+            expiration_date=exp,
+            low_stock_threshold=2.0,
+        )
+        assert item.expiration_date == exp
+        assert item.location == InventoryLocation.FRIDGE
+
+    def test_is_expired_false(self):
+        item = InventoryItem(
+            item_name="Milk",
+            expiration_date=date.today() + timedelta(days=5),
+        )
+        assert item.is_expired is False
+
+    def test_is_expired_true(self):
+        item = InventoryItem(
+            item_name="Milk",
+            expiration_date=date.today() - timedelta(days=1),
+        )
+        assert item.is_expired is True
+
+    def test_is_expired_none(self):
+        item = InventoryItem(item_name="Rice")
+        assert item.is_expired is False
+
+    def test_is_low_stock(self):
+        item = InventoryItem(item_name="Eggs", quantity=1.0, low_stock_threshold=3.0)
+        assert item.is_low_stock is True
+
+    def test_not_low_stock(self):
+        item = InventoryItem(item_name="Eggs", quantity=10.0, low_stock_threshold=3.0)
+        assert item.is_low_stock is False
+
+    def test_days_until_expiration(self):
+        item = InventoryItem(
+            item_name="Milk",
+            expiration_date=date.today() + timedelta(days=5),
+        )
+        assert item.days_until_expiration == 5
+
+    def test_days_until_expiration_none(self):
+        item = InventoryItem(item_name="Rice")
+        assert item.days_until_expiration is None
+
+
+class TestWasteRecord:
+    """Tests for WasteRecord model."""
+
+    def test_create_basic(self):
+        record = WasteRecord(item_name="Bread", reason=WasteReason.SPOILED)
+        assert record.item_name == "Bread"
+        assert record.reason == WasteReason.SPOILED
+        assert record.waste_logged_date == date.today()
+
+    def test_create_full(self):
+        record = WasteRecord(
+            item_name="Bell Peppers",
+            quantity=3.0,
+            unit="pieces",
+            reason=WasteReason.OVERRIPE,
+            estimated_cost=2.97,
+            original_purchase_date=date.today() - timedelta(days=5),
+            logged_by="Francisco",
+        )
+        assert record.estimated_cost == 2.97
+        assert record.logged_by == "Francisco"
+
+
+class TestCategoryBudget:
+    """Tests for CategoryBudget model."""
+
+    def test_remaining(self):
+        cb = CategoryBudget(category="Produce", limit=100.0, spent=80.0)
+        assert cb.remaining == 20.0
+
+    def test_percentage_used(self):
+        cb = CategoryBudget(category="Produce", limit=100.0, spent=75.0)
+        assert cb.percentage_used == 75.0
+
+    def test_is_over_budget(self):
+        cb = CategoryBudget(category="Produce", limit=100.0, spent=110.0)
+        assert cb.is_over_budget is True
+
+    def test_not_over_budget(self):
+        cb = CategoryBudget(category="Produce", limit=100.0, spent=80.0)
+        assert cb.is_over_budget is False
+
+    def test_zero_limit(self):
+        cb = CategoryBudget(category="Produce", limit=0.0, spent=0.0)
+        assert cb.percentage_used == 0.0
+
+
+class TestBudgetTracking:
+    """Tests for BudgetTracking model."""
+
+    def test_create(self):
+        bt = BudgetTracking(month="2026-01", monthly_limit=500.0)
+        assert bt.month == "2026-01"
+        assert bt.monthly_limit == 500.0
+        assert bt.total_spent == 0.0
+
+    def test_total_remaining(self):
+        bt = BudgetTracking(month="2026-01", monthly_limit=500.0, total_spent=350.0)
+        assert bt.total_remaining == 150.0
+
+    def test_total_percentage(self):
+        bt = BudgetTracking(month="2026-01", monthly_limit=500.0, total_spent=250.0)
+        assert bt.total_percentage_used == 50.0
+
+    def test_zero_limit(self):
+        bt = BudgetTracking(month="2026-01", monthly_limit=0.0)
+        assert bt.total_percentage_used == 0.0
+
+    def test_with_categories(self):
+        bt = BudgetTracking(
+            month="2026-01",
+            monthly_limit=500.0,
+            category_budgets=[
+                CategoryBudget(category="Produce", limit=100.0),
+                CategoryBudget(category="Dairy & Eggs", limit=80.0),
+            ],
+        )
+        assert len(bt.category_budgets) == 2
