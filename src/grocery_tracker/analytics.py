@@ -5,12 +5,16 @@ from datetime import date, timedelta
 
 from .data_store import DataStore
 from .models import (
+    BudgetTracking,
+    CategoryBudget,
     CategorySpending,
     FrequencyData,
     OutOfStockRecord,
     PriceComparison,
     SpendingSummary,
     Suggestion,
+    WasteRecord,
+    WasteReason,
 )
 
 
@@ -320,3 +324,201 @@ class Analytics:
                     return category
 
         return "Other"
+
+    # --- Waste Analytics ---
+
+    def log_waste(
+        self,
+        item_name: str,
+        quantity: float = 1.0,
+        unit: str | None = None,
+        reason: WasteReason = WasteReason.OTHER,
+        estimated_cost: float | None = None,
+        original_purchase_date: date | None = None,
+        logged_by: str | None = None,
+    ) -> WasteRecord:
+        """Log a food waste event.
+
+        Args:
+            item_name: Item that was wasted
+            quantity: Amount wasted
+            unit: Unit of measurement
+            reason: Why it was wasted
+            estimated_cost: Estimated dollar value
+            original_purchase_date: When it was bought
+            logged_by: Who logged it
+
+        Returns:
+            The created WasteRecord
+        """
+        record = WasteRecord(
+            item_name=item_name,
+            quantity=quantity,
+            unit=unit,
+            reason=reason,
+            estimated_cost=estimated_cost,
+            original_purchase_date=original_purchase_date,
+            logged_by=logged_by,
+        )
+        self.data_store.add_waste_record(record)
+        return record
+
+    def waste_summary(self, period: str = "monthly") -> dict:
+        """Summarize waste for a period.
+
+        Args:
+            period: "weekly", "monthly", or "yearly"
+
+        Returns:
+            Dict with waste summary data
+        """
+        today = date.today()
+
+        if period == "weekly":
+            start_date = today - timedelta(days=today.weekday())
+        elif period == "yearly":
+            start_date = today.replace(month=1, day=1)
+        else:
+            start_date = today.replace(day=1)
+
+        records = self.data_store.load_waste_log()
+        period_records = [
+            r for r in records
+            if start_date <= r.waste_logged_date <= today
+        ]
+
+        total_cost = sum(r.estimated_cost or 0.0 for r in period_records)
+        total_items = len(period_records)
+
+        # Breakdown by reason
+        by_reason: dict[str, int] = defaultdict(int)
+        for r in period_records:
+            by_reason[r.reason.value] += 1
+
+        # Most wasted items
+        item_counts: dict[str, int] = defaultdict(int)
+        for r in period_records:
+            item_counts[r.item_name] += 1
+
+        most_wasted = sorted(item_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        return {
+            "period": period,
+            "start_date": start_date.isoformat(),
+            "end_date": today.isoformat(),
+            "total_items_wasted": total_items,
+            "total_cost": round(total_cost, 2),
+            "by_reason": dict(by_reason),
+            "most_wasted": [{"item": item, "count": count} for item, count in most_wasted],
+        }
+
+    def waste_insights(self) -> list[str]:
+        """Generate waste reduction insights.
+
+        Returns:
+            List of insight messages
+        """
+        insights = []
+        records = self.data_store.load_waste_log()
+
+        if not records:
+            return insights
+
+        # Find items wasted multiple times
+        item_counts: dict[str, int] = defaultdict(int)
+        item_costs: dict[str, float] = defaultdict(float)
+        for r in records:
+            item_counts[r.item_name] += 1
+            item_costs[r.item_name] += r.estimated_cost or 0.0
+
+        for item, count in item_counts.items():
+            if count >= 3:
+                cost = item_costs[item]
+                insights.append(
+                    f"You've wasted {item} {count} times"
+                    + (f" (${cost:.2f} total)" if cost > 0 else "")
+                    + " — consider buying less"
+                )
+            elif count >= 2:
+                insights.append(
+                    f"{item} wasted {count} times — buy smaller quantities?"
+                )
+
+        # Most common reason
+        reason_counts: dict[str, int] = defaultdict(int)
+        for r in records:
+            reason_counts[r.reason.value] += 1
+
+        if reason_counts:
+            top_reason = max(reason_counts, key=reason_counts.get)  # type: ignore[arg-type]
+            if top_reason == "spoiled" and reason_counts[top_reason] >= 3:
+                insights.append(
+                    f"{reason_counts[top_reason]} items spoiled — check fridge temperature or buy less perishables"
+                )
+
+        return insights
+
+    # --- Budget Tracking ---
+
+    def get_budget_status(self, month: str | None = None) -> BudgetTracking | None:
+        """Get budget tracking for a month, auto-calculating spent amounts.
+
+        Args:
+            month: YYYY-MM format. Defaults to current month.
+
+        Returns:
+            BudgetTracking with current spending, or None if no budget set
+        """
+        if month is None:
+            month = date.today().strftime("%Y-%m")
+
+        budget = self.data_store.load_budget(month)
+        if budget is None:
+            return None
+
+        # Calculate actual spending from receipts
+        summary = self.spending_summary(period="monthly")
+        budget.total_spent = summary.total_spending
+
+        # Update category spending
+        cat_spending: dict[str, float] = {}
+        for cat in summary.categories:
+            cat_spending[cat.category] = cat.total
+
+        for cat_budget in budget.category_budgets:
+            cat_budget.spent = cat_spending.get(cat_budget.category, 0.0)
+
+        return budget
+
+    def set_budget(
+        self,
+        monthly_limit: float,
+        category_limits: dict[str, float] | None = None,
+        month: str | None = None,
+    ) -> BudgetTracking:
+        """Set budget for a month.
+
+        Args:
+            monthly_limit: Total monthly budget
+            category_limits: Optional per-category limits
+            month: YYYY-MM format. Defaults to current month.
+
+        Returns:
+            Created BudgetTracking
+        """
+        if month is None:
+            month = date.today().strftime("%Y-%m")
+
+        cat_budgets = []
+        if category_limits:
+            for cat, limit in category_limits.items():
+                cat_budgets.append(CategoryBudget(category=cat, limit=limit))
+
+        budget = BudgetTracking(
+            month=month,
+            monthly_limit=monthly_limit,
+            category_budgets=cat_budgets,
+        )
+
+        self.data_store.save_budget(budget)
+        return budget

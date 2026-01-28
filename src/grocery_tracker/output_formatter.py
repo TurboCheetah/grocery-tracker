@@ -56,7 +56,7 @@ class OutputFormatter:
     def _output_rich(self, data: dict[str, Any], message: str) -> None:
         """Output with Rich formatting."""
         if message:
-            self.console.print(f"[green]\u2713[/green] {message}")
+            self.console.print(f"[green]✓[/green] {message}")
 
         # Format based on data type
         if "list" in data.get("data", {}):
@@ -83,6 +83,22 @@ class OutputFormatter:
             self._render_out_of_stock(data)
         elif "frequency" in data.get("data", {}):
             self._render_frequency(data)
+        elif "inventory_item" in data.get("data", {}):
+            self._render_inventory_item(data)
+        elif "inventory" in data.get("data", {}):
+            self._render_inventory(data)
+        elif "expiring" in data.get("data", {}):
+            self._render_expiring(data)
+        elif "low_stock" in data.get("data", {}):
+            self._render_low_stock(data)
+        elif "waste_log" in data.get("data", {}):
+            self._render_waste_log(data)
+        elif "waste_summary" in data.get("data", {}):
+            self._render_waste_summary(data)
+        elif "budget_status" in data.get("data", {}):
+            self._render_budget_status(data)
+        elif "preferences" in data.get("data", {}):
+            self._render_preferences(data)
 
     def _render_grocery_list(self, data: dict) -> None:
         """Render grocery list with Rich."""
@@ -365,6 +381,202 @@ Total: ${receipt["total"]:.2f}""",
             self.console.print(f"Next expected: {freq['next_expected']}")
         self.console.print(f"Confidence: {freq.get('confidence', 'low')}")
         self.console.print(f"Total purchases: {freq.get('total_purchases', 0)}")
+
+    def _render_inventory_item(self, data: dict) -> None:
+        """Render a single inventory item."""
+        item = data["data"]["inventory_item"]
+        self.console.print(
+            f"  {item['item_name']} — qty: {item.get('quantity', 1)}, "
+            f"location: {item.get('location', 'pantry')}"
+        )
+
+    def _render_inventory(self, data: dict) -> None:
+        """Render inventory list."""
+        items = data["data"]["inventory"]
+
+        if not items:
+            self.console.print("[dim]No items in inventory[/dim]")
+            return
+
+        table = Table(title="Household Inventory", show_header=True, header_style="bold cyan")
+        table.add_column("Item", style="cyan")
+        table.add_column("Qty", justify="right")
+        table.add_column("Location", style="green")
+        table.add_column("Category", style="yellow")
+        table.add_column("Expires", style="red")
+
+        for item in items:
+            exp = str(item.get("expiration_date", "")) if item.get("expiration_date") else "-"
+            table.add_row(
+                item["item_name"],
+                str(item.get("quantity", 1)),
+                item.get("location", "pantry"),
+                item.get("category", "Other"),
+                exp,
+            )
+
+        self.console.print(table)
+
+    def _render_expiring(self, data: dict) -> None:
+        """Render expiring items."""
+        items = data["data"]["expiring"]
+        days = data["data"].get("days", 3)
+
+        if not items:
+            self.console.print(f"[dim]No items expiring within {days} days[/dim]")
+            return
+
+        self.console.print(f"\n[bold red]Items Expiring Within {days} Days[/bold red]")
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Item")
+        table.add_column("Expires", style="red")
+        table.add_column("Location")
+        table.add_column("Qty", justify="right")
+
+        for item in items:
+            table.add_row(
+                item["item_name"],
+                str(item.get("expiration_date", "")),
+                item.get("location", ""),
+                str(item.get("quantity", 1)),
+            )
+
+        self.console.print(table)
+
+    def _render_low_stock(self, data: dict) -> None:
+        """Render low stock items."""
+        items = data["data"]["low_stock"]
+
+        if not items:
+            self.console.print("[dim]No items are low on stock[/dim]")
+            return
+
+        self.console.print("\n[bold yellow]Low Stock Items[/bold yellow]")
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Item")
+        table.add_column("Qty", justify="right", style="red")
+        table.add_column("Threshold", justify="right")
+        table.add_column("Location")
+
+        for item in items:
+            table.add_row(
+                item["item_name"],
+                str(item.get("quantity", 0)),
+                str(item.get("low_stock_threshold", 1)),
+                item.get("location", ""),
+            )
+
+        self.console.print(table)
+
+    def _render_waste_log(self, data: dict) -> None:
+        """Render waste log records."""
+        records = data["data"]["waste_log"]
+
+        if not records:
+            self.console.print("[dim]No waste records[/dim]")
+            return
+
+        self.console.print("\n[bold]Waste Log[/bold]")
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Item")
+        table.add_column("Qty", justify="right")
+        table.add_column("Reason")
+        table.add_column("Cost", justify="right")
+        table.add_column("Date")
+
+        for record in records:
+            cost = f"${record['estimated_cost']:.2f}" if record.get("estimated_cost") else "-"
+            table.add_row(
+                record["item_name"],
+                str(record.get("quantity", 1)),
+                record.get("reason", "other"),
+                cost,
+                str(record.get("waste_logged_date", "")),
+            )
+
+        self.console.print(table)
+
+    def _render_waste_summary(self, data: dict) -> None:
+        """Render waste summary with insights."""
+        summary = data["data"]["waste_summary"]
+        insights = data["data"].get("insights", [])
+
+        self.console.print(f"\n[bold]Waste Summary ({summary['period']})[/bold]")
+        self.console.print(f"Period: {summary['start_date']} to {summary['end_date']}")
+        self.console.print(f"Items wasted: {summary['total_items_wasted']}")
+        self.console.print(f"Total cost: ${summary['total_cost']:.2f}")
+
+        if summary.get("by_reason"):
+            self.console.print("\n[dim]By reason:[/dim]")
+            for reason, count in summary["by_reason"].items():
+                self.console.print(f"  {reason}: {count}")
+
+        if summary.get("most_wasted"):
+            self.console.print("\n[dim]Most wasted:[/dim]")
+            for entry in summary["most_wasted"]:
+                self.console.print(f"  {entry['item']}: {entry['count']} times")
+
+        if insights:
+            self.console.print("\n[bold yellow]Insights[/bold yellow]")
+            for insight in insights:
+                self.console.print(f"  💡 {insight}")
+
+    def _render_budget_status(self, data: dict) -> None:
+        """Render budget status."""
+        budget = data["data"]["budget_status"]
+
+        self.console.print(f"\n[bold]Budget Status — {budget['month']}[/bold]")
+
+        limit = budget.get("monthly_limit", 0)
+        spent = budget.get("total_spent", 0)
+        remaining = limit - spent
+        color = "green" if remaining >= 0 else "red"
+
+        self.console.print(f"Budget: ${limit:.2f}")
+        self.console.print(f"Spent: ${spent:.2f}")
+        self.console.print(f"Remaining: [{color}]${remaining:.2f}[/{color}]")
+
+        if budget.get("category_budgets"):
+            self.console.print("\n[dim]By category:[/dim]")
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Category")
+            table.add_column("Limit", justify="right")
+            table.add_column("Spent", justify="right")
+            table.add_column("Remaining", justify="right")
+
+            for cb in budget["category_budgets"]:
+                cb_remaining = cb.get("limit", 0) - cb.get("spent", 0)
+                cb_color = "green" if cb_remaining >= 0 else "red"
+                table.add_row(
+                    cb["category"],
+                    f"${cb.get('limit', 0):.2f}",
+                    f"${cb.get('spent', 0):.2f}",
+                    f"[{cb_color}]${cb_remaining:.2f}[/{cb_color}]",
+                )
+            self.console.print(table)
+
+    def _render_preferences(self, data: dict) -> None:
+        """Render user preferences."""
+        prefs = data["data"]["preferences"]
+
+        self.console.print(f"\n[bold]Preferences: {prefs['user']}[/bold]")
+
+        if prefs.get("brand_preferences"):
+            self.console.print("\n[dim]Brand preferences:[/dim]")
+            for item, brand in prefs["brand_preferences"].items():
+                self.console.print(f"  {item}: {brand}")
+
+        if prefs.get("dietary_restrictions"):
+            self.console.print(f"\nDietary: {', '.join(prefs['dietary_restrictions'])}")
+
+        if prefs.get("allergens"):
+            self.console.print(f"Allergens: [red]{', '.join(prefs['allergens'])}[/red]")
+
+        if prefs.get("favorite_items"):
+            self.console.print(f"Favorites: {', '.join(prefs['favorite_items'])}")
 
     def error(self, message: str, error_code: str | None = None) -> None:
         """Output error message.
