@@ -2,8 +2,9 @@
 
 from .analytics import Analytics
 from .config import ConfigManager
-from .data_store import DataStore
+from .data_store import BackendType, create_data_store, DataStore
 from .inventory_manager import InventoryManager
+from .sqlite_store import SQLiteStore
 from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
 from .models import (
     BudgetTracking,
@@ -38,11 +39,13 @@ __version__ = "0.1.0"
 
 __all__ = [
     "Analytics",
+    "BackendType",
     "BudgetTracking",
     "Category",
     "CategoryBudget",
     "CategorySpending",
     "ConfigManager",
+    "create_data_store",
     "DataStore",
     "DuplicateItemError",
     "FrequencyData",
@@ -67,6 +70,7 @@ __all__ = [
     "ReceiptProcessor",
     "ReconciliationResult",
     "SpendingSummary",
+    "SQLiteStore",
     "Suggestion",
     "UserPreferences",
     "WasteReason",
