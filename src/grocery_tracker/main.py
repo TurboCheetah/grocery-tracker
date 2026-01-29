@@ -8,7 +8,8 @@ import typer
 from rich.console import Console
 
 from .analytics import Analytics
-from .data_store import DataStore
+from .config import ConfigManager
+from .data_store import BackendType, create_data_store, DataStore
 from .inventory_manager import InventoryManager
 from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
 from .models import InventoryLocation, ItemStatus, Priority, WasteReason
@@ -23,19 +24,30 @@ app = typer.Typer(
 
 console = Console()
 
-# Global state for formatter (set by callback)
+# Global state for formatter and config (set by callback)
 formatter: OutputFormatter = OutputFormatter()
+config: ConfigManager | None = None
 data_store: DataStore | None = None
 list_manager: ListManager | None = None
 inventory_manager: InventoryManager | None = None
 
 
+def get_config() -> ConfigManager:
+    """Get or create ConfigManager instance."""
+    global config
+    if config is None:
+        config = ConfigManager()
+    return config
+
+
 def get_data_store() -> DataStore:
-    """Get or create DataStore instance."""
+    """Get or create DataStore instance using config values."""
     global data_store
     if data_store is None:
-        data_store = DataStore()
-    return data_store
+        cfg = get_config()
+        backend = BackendType(cfg.data.backend)
+        data_store = create_data_store(backend=backend, data_dir=cfg.data.storage_dir)  # type: ignore[assignment]
+    return data_store  # type: ignore[return-value]
 
 
 def get_list_manager() -> ListManager:
@@ -62,14 +74,20 @@ def main(
     data_dir: Annotated[Path | None, typer.Option("--data-dir", help="Data directory path")] = None,
 ) -> None:
     """Grocery Tracker CLI - Manage your grocery lists with intelligence."""
-    global formatter, data_store, list_manager, inventory_manager
+    global formatter, config, data_store, list_manager, inventory_manager
 
     formatter = OutputFormatter(json_mode=json_output)
 
-    if data_dir:
-        data_store = DataStore(data_dir=data_dir)
-        list_manager = ListManager(data_store)
-        inventory_manager = InventoryManager(data_store)
+    # Load config early
+    config = ConfigManager()
+
+    # CLI --data-dir overrides config, which overrides default
+    effective_data_dir = data_dir if data_dir else config.data.storage_dir
+    backend = BackendType(config.data.backend)
+
+    data_store = create_data_store(backend=backend, data_dir=effective_data_dir)  # type: ignore[assignment]
+    list_manager = ListManager(data_store)  # type: ignore[arg-type]
+    inventory_manager = InventoryManager(data_store)  # type: ignore[arg-type]
 
 
 @app.command()
@@ -92,12 +110,13 @@ def add(
 ) -> None:
     """Add an item to the grocery list."""
     try:
+        cfg = get_config()
         manager = get_list_manager()
         result = manager.add_item(
             name=item,
             quantity=quantity,
-            store=store,
-            category=category,
+            store=store or cfg.defaults.store,
+            category=category or cfg.defaults.category,
             unit=unit,
             brand_preference=brand,
             estimated_price=price,
@@ -384,8 +403,10 @@ def stats_default(
     if ctx.invoked_subcommand is not None:
         return
     try:
+        cfg = get_config()
+        effective_budget = budget if budget is not None else cfg.budget.monthly_limit
         analytics = Analytics(data_store=get_data_store())
-        summary = analytics.spending_summary(period=period, budget_limit=budget)
+        summary = analytics.spending_summary(period=period, budget_limit=effective_budget)
 
         output_data = {
             "success": True,
