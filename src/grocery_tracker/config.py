@@ -11,6 +11,7 @@ class DataConfig:
     """Data storage configuration."""
 
     storage_dir: Path
+    backend: str = "json"
     backup_enabled: bool = True
     backup_interval_days: int = 7
 
@@ -108,6 +109,7 @@ class ConfigManager:
                 storage_dir=Path(
                     data.get("data", {}).get("storage_dir", "~/grocery-tracker/data")
                 ).expanduser(),
+                backend=data.get("data", {}).get("backend", "json"),
                 backup_enabled=data.get("data", {}).get("backup_enabled", True),
                 backup_interval_days=data.get("data", {}).get("backup_interval_days", 7),
             ),
