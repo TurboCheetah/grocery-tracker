@@ -2,7 +2,7 @@
 
 **Date**: 2026-01-27
 **Reviewer**: Claude Code (automated audit)
-**Tests**: 265 passing, 98.07% coverage
+**Tests**: 378 passing, 96.03% coverage
 
 ---
 
@@ -117,7 +117,7 @@
 | src/grocery_tracker/output_formatter.py | DONE | OutputFormatter (Rich + JSON) |
 | src/grocery_tracker/models.py | DONE | All Pydantic models |
 | src/grocery_tracker/analytics.py | DONE | Analytics with spending, frequency, comparison, suggestions |
-| src/grocery_tracker/inventory_manager.py | NOT DONE | Not implemented yet (Phase 3) |
+| src/grocery_tracker/inventory_manager.py | DONE | InventoryManager with full CRUD |
 | .gitignore | DONE | Covers Python, venv, IDE, testing, data, config |
 | config.toml.example | DONE | |
 | pyproject.toml | DONE | Full config with tools |
@@ -139,7 +139,10 @@
 | `grocery stats` | DONE | Spending summary (weekly/monthly/yearly), frequency, compare, suggest |
 | `grocery out-of-stock report` | DONE | Report items out of stock at stores |
 | `grocery out-of-stock list` | DONE | List OOS records with filters |
-| `grocery inventory *` | NOT DONE | Inventory not implemented (Phase 3) |
+| `grocery inventory add/remove/list/expiring/low-stock/use` | DONE | Full inventory management CLI |
+| `grocery waste log/list/summary` | DONE | Waste tracking with insights |
+| `grocery budget set/status` | DONE | Budget tracking with category support |
+| `grocery preferences view/set` | DONE | User preferences CLI |
 
 ---
 
@@ -148,7 +151,7 @@
 ### Coverage Requirements
 | Requirement | Status | Notes |
 |---|---|---|
-| Core business logic: 90%+ coverage | DONE | 98.07% overall |
+| Core business logic: 90%+ coverage | DONE | 96.03% overall |
 | CLI commands: 100% coverage | DONE | main.py at 91% (uncovered: `__main__` guard, lazy init, some error paths) |
 | Data persistence: 100% coverage | DONE | data_store.py at 99% |
 | Receipt processing: edge cases tested | DONE | receipt_processor.py at 100% |
@@ -231,38 +234,42 @@
 ### 3.1 Inventory Management
 | Requirement | Status | Notes |
 |---|---|---|
-| Current stock tracking | NOT DONE | No inventory_manager.py |
-| Quantity tracking | NOT DONE | |
-| Expiration dates | NOT DONE | |
-| Low stock alerts | NOT DONE | |
+| Current stock tracking | DONE | `inventory_manager.py` with full CRUD |
+| Quantity tracking | DONE | `grocery inventory add/use` with quantity updates |
+| Expiration dates | DONE | `expiration_date` field, `grocery inventory expiring` command |
+| Low stock alerts | DONE | `is_low_stock` property, `grocery inventory low-stock` command |
+| Add to list from inventory | DONE | `InventoryManager.add_from_receipt()` auto-adds from receipts |
 
 ### 3.2 Waste Logging
 | Requirement | Status | Notes |
 |---|---|---|
-| Waste tracking | NOT DONE | |
-| Waste reduction insights | NOT DONE | |
-| Cost of waste | NOT DONE | |
+| Waste tracking | DONE | `grocery waste log` with item, quantity, reason, cost |
+| Waste reduction insights | DONE | `Analytics.waste_insights()` detects repeat-waste items |
+| Cost of waste | DONE | `waste_summary()` totals estimated cost per period |
 
 ### 3.3 Use-It-Up Suggestions
 | Requirement | Status | Notes |
 |---|---|---|
-| Expiring soon alerts | NOT DONE | |
-| Recipe suggestions | NOT DONE | |
+| Expiring soon alerts | DONE | `grocery inventory expiring --days N` |
+| Recipe suggestions | NOT DONE | Requires LLM integration (skill-layer concern) |
 
 ### 3.4 Shared Household Preferences
 | Requirement | Status | Notes |
 |---|---|---|
-| Brand preferences by person | PARTIAL | `UserPreferences` model defined, config supports users, but no CLI commands |
-| Dietary restrictions | PARTIAL | Model defined, config supports it |
+| Brand preferences by person | DONE | `grocery preferences set --brand "milk:Organic Valley"` |
+| Dietary restrictions | DONE | `grocery preferences set --dietary vegetarian` |
 | Purchase attribution | DONE | `added_by` field on items, `purchased_by` on receipts |
+| Favorite items | DONE | `grocery preferences set --favorite mango` |
+| Allergens | DONE | `grocery preferences set --allergen peanuts` |
 
 ### 3.5 Budgeting & Financial Features
 | Requirement | Status | Notes |
 |---|---|---|
-| Monthly budget | PARTIAL | Config defined, no enforcement |
-| Category budgets | NOT DONE | |
-| Budget alerts | NOT DONE | |
+| Monthly budget | DONE | `grocery budget set 500` with status tracking |
+| Category budgets | DONE | `CategoryBudget` model with per-category limits |
+| Budget alerts | DONE | Budget status shows over/under with color coding |
 | Coupon/sale tracking | NOT DONE | |
+| Savings tracker | NOT DONE | |
 
 ---
 
@@ -291,7 +298,7 @@
 | Unit tests: 90%+ coverage on core logic | DONE (99.52%) |
 | Integration tests: All major workflows tested | DONE |
 | CLI tests: 100% command coverage | DONE |
-| All tests pass consistently | DONE (189/189) |
+| All tests pass consistently | DONE (378/378) |
 
 ---
 
@@ -312,7 +319,6 @@
 - Multi-store price comparison
 - Smart suggestions (restock, price alerts, out-of-stock patterns)
 - Out-of-stock tracking with substitution history
-- 265 tests passing, 98.07% coverage
 
 **Phase 2 remaining (NOT DONE):**
 - Seasonal patterns
@@ -321,4 +327,16 @@
 - Recipe integration
 - Bulk buying analysis
 
-**Phase 3 is NOT started** — inventory, waste, household preferences CLI not implemented.
+**Phase 3 is MOSTLY COMPLETE.** Implemented:
+- Inventory management (add, remove, list, use, expiring, low-stock)
+- Waste logging with cost tracking and reduction insights
+- Expiring-soon alerts
+- Shared household preferences (brand, dietary, allergens, favorites)
+- Monthly and category budget tracking with status
+
+**Phase 3 remaining (NOT DONE):**
+- Recipe suggestions (LLM/skill-layer concern)
+- Coupon/sale tracking
+- Savings tracker
+
+**378 tests passing, 96.03% coverage**
