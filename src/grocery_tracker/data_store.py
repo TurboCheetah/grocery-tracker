@@ -1,9 +1,14 @@
-"""JSON-based data persistence for Grocery Tracker."""
+"""Data persistence for Grocery Tracker.
+
+This module provides data persistence with support for JSON (default) or SQLite backends.
+Use create_data_store() to get the appropriate backend based on configuration.
+"""
 
 import json
 from datetime import date, datetime, time
+from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, TYPE_CHECKING
 from uuid import UUID
 
 from .models import (
@@ -23,6 +28,64 @@ from .models import (
     BudgetTracking,
     UserPreferences,
 )
+
+
+class BackendType(str, Enum):
+    """Data storage backend types."""
+
+    JSON = "json"
+    SQLITE = "sqlite"
+
+
+class DataStoreProtocol(Protocol):
+    """Protocol defining the data store interface."""
+
+    def load_list(self) -> GroceryList: ...
+    def save_list(self, grocery_list: GroceryList) -> None: ...
+    def get_item(self, item_id: UUID) -> GroceryItem | None: ...
+    def save_receipt(self, receipt: Receipt) -> UUID: ...
+    def load_receipt(self, receipt_id: str | UUID) -> Receipt | None: ...
+    def list_receipts(self) -> list[Receipt]: ...
+    def load_price_history(self) -> dict[str, dict[str, PriceHistory]]: ...
+    def save_price_history(self, history: dict[str, dict[str, PriceHistory]]) -> None: ...
+    def update_price(
+        self,
+        item_name: str,
+        store: str,
+        price: float,
+        purchase_date: date,
+        receipt_id: UUID | None = None,
+        sale: bool = False,
+    ) -> None: ...
+    def get_price_history(self, item_name: str, store: str | None = None) -> PriceHistory | None: ...
+    def load_frequency_data(self) -> dict[str, FrequencyData]: ...
+    def save_frequency_data(self, frequency: dict[str, FrequencyData]) -> None: ...
+    def update_frequency(
+        self,
+        item_name: str,
+        purchase_date: date,
+        quantity: float = 1.0,
+        store: str | None = None,
+        category: str = "Other",
+    ) -> None: ...
+    def get_frequency(self, item_name: str) -> FrequencyData | None: ...
+    def load_out_of_stock(self) -> list[OutOfStockRecord]: ...
+    def save_out_of_stock(self, records: list[OutOfStockRecord]) -> None: ...
+    def add_out_of_stock(self, record: OutOfStockRecord) -> UUID: ...
+    def get_out_of_stock_for_item(
+        self, item_name: str, store: str | None = None
+    ) -> list[OutOfStockRecord]: ...
+    def load_inventory(self) -> list[InventoryItem]: ...
+    def save_inventory(self, items: list[InventoryItem]) -> None: ...
+    def load_waste_log(self) -> list[WasteRecord]: ...
+    def save_waste_log(self, records: list[WasteRecord]) -> None: ...
+    def add_waste_record(self, record: WasteRecord) -> UUID: ...
+    def load_budget(self, month: str | None = None) -> BudgetTracking | None: ...
+    def save_budget(self, budget: BudgetTracking) -> None: ...
+    def load_preferences(self) -> dict[str, UserPreferences]: ...
+    def save_preferences(self, preferences: dict[str, UserPreferences]) -> None: ...
+    def get_user_preferences(self, user: str) -> UserPreferences | None: ...
+    def save_user_preferences(self, prefs: UserPreferences) -> None: ...
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -681,3 +744,43 @@ class DataStore:
         all_prefs = self.load_preferences()
         all_prefs[prefs.user] = prefs
         self.save_preferences(all_prefs)
+
+
+def create_data_store(
+    backend: BackendType = BackendType.JSON,
+    data_dir: Path | None = None,
+    db_path: Path | None = None,
+) -> DataStoreProtocol:
+    """Create a data store with the specified backend.
+
+    Args:
+        backend: Which backend to use (json or sqlite)
+        data_dir: Directory for data files (used by JSON backend, also used
+                  as base path for SQLite if db_path not specified)
+        db_path: Path to SQLite database file (only used by SQLite backend)
+
+    Returns:
+        A DataStore or SQLiteStore instance
+
+    Example:
+        # Use JSON backend (default)
+        store = create_data_store()
+
+        # Use SQLite backend
+        store = create_data_store(BackendType.SQLITE)
+
+        # Use SQLite with custom path
+        store = create_data_store(
+            BackendType.SQLITE,
+            db_path=Path("./my_data/grocery.db")
+        )
+    """
+    if backend == BackendType.SQLITE:
+        from .sqlite_store import SQLiteStore
+
+        if db_path is None and data_dir is not None:
+            db_path = data_dir / "grocery.db"
+
+        return SQLiteStore(db_path=db_path)
+    else:
+        return DataStore(data_dir=data_dir)
