@@ -8,59 +8,53 @@ from typer.testing import CliRunner
 
 from grocery_tracker.main import app
 from grocery_tracker.models import LineItem, Receipt
+from grocery_tracker.data_store import DataStore
 
 runner = CliRunner()
 
 
-@pytest.fixture(autouse=True)
-def _setup_cli(tmp_path, monkeypatch):
-    """Set up CLI with temp data directory."""
-    import grocery_tracker.main as main_module
+@pytest.fixture
+def cli_data_dir(tmp_path):
+    """Create a temp data directory for CLI tests."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    return data_dir
 
-    from grocery_tracker.data_store import DataStore
-    from grocery_tracker.list_manager import ListManager
 
-    ds = DataStore(data_dir=tmp_path / "data")
-    lm = ListManager(data_store=ds)
-
-    main_module.data_store = ds
-    main_module.list_manager = lm
-
-    yield ds, lm
-
-    main_module.data_store = None
-    main_module.list_manager = None
+@pytest.fixture
+def data_store(cli_data_dir):
+    """Create a DataStore for direct data manipulation in tests."""
+    return DataStore(data_dir=cli_data_dir)
 
 
 class TestStatsCommand:
     """Tests for grocery stats command."""
 
-    def test_stats_default_json(self, _setup_cli):
+    def test_stats_default_json(self, cli_data_dir):
         """Stats command returns spending summary."""
-        result = runner.invoke(app, ["--json", "stats"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
         assert "spending" in output["data"]
         assert output["data"]["spending"]["period"] == "monthly"
 
-    def test_stats_weekly(self, _setup_cli):
+    def test_stats_weekly(self, cli_data_dir):
         """Stats command with weekly period."""
-        result = runner.invoke(app, ["--json", "stats", "--period", "weekly"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "--period", "weekly"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["data"]["spending"]["period"] == "weekly"
 
-    def test_stats_with_budget(self, _setup_cli):
+    def test_stats_with_budget(self, cli_data_dir):
         """Stats command with budget."""
-        result = runner.invoke(app, ["--json", "stats", "--budget", "500"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "--budget", "500"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["data"]["spending"]["budget_limit"] == 500.0
 
-    def test_stats_with_receipt_data(self, _setup_cli):
+    def test_stats_with_receipt_data(self, cli_data_dir, data_store):
         """Stats with actual receipt data."""
-        ds, _ = _setup_cli
         today = date.today()
         receipt = Receipt(
             store_name="Giant",
@@ -71,32 +65,31 @@ class TestStatsCommand:
             subtotal=5.49,
             total=5.49,
         )
-        ds.save_receipt(receipt)
+        data_store.save_receipt(receipt)
 
-        result = runner.invoke(app, ["--json", "stats"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["data"]["spending"]["total_spending"] == 5.49
 
-    def test_stats_rich_mode(self, _setup_cli):
+    def test_stats_rich_mode(self, cli_data_dir):
         """Stats command in Rich mode doesn't crash."""
-        result = runner.invoke(app, ["stats"])
+        result = runner.invoke(app, ["--data-dir", str(cli_data_dir), "stats"])
         assert result.exit_code == 0
 
 
 class TestStatsFrequencyCommand:
     """Tests for grocery stats frequency command."""
 
-    def test_frequency_no_data(self, _setup_cli):
+    def test_frequency_no_data(self, cli_data_dir):
         """Frequency command warns when no data."""
-        result = runner.invoke(app, ["--json", "stats", "frequency", "Milk"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "frequency", "Milk"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert "warning" in output
 
-    def test_frequency_with_data(self, _setup_cli):
+    def test_frequency_with_data(self, cli_data_dir, data_store):
         """Frequency command returns data."""
-        ds, _ = _setup_cli
         from grocery_tracker.models import FrequencyData, PurchaseRecord
         from datetime import timedelta
 
@@ -109,9 +102,9 @@ class TestStatsFrequencyCommand:
                 PurchaseRecord(date=today - timedelta(days=5)),
             ],
         )
-        ds.save_frequency_data({"Milk": freq})
+        data_store.save_frequency_data({"Milk": freq})
 
-        result = runner.invoke(app, ["--json", "stats", "frequency", "Milk"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "frequency", "Milk"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
@@ -122,20 +115,19 @@ class TestStatsFrequencyCommand:
 class TestStatsCompareCommand:
     """Tests for grocery stats compare command."""
 
-    def test_compare_no_data(self, _setup_cli):
+    def test_compare_no_data(self, cli_data_dir):
         """Compare command warns when no data."""
-        result = runner.invoke(app, ["--json", "stats", "compare", "Milk"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "compare", "Milk"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert "warning" in output
 
-    def test_compare_with_data(self, _setup_cli):
+    def test_compare_with_data(self, cli_data_dir, data_store):
         """Compare command returns price comparison."""
-        ds, _ = _setup_cli
-        ds.update_price("Milk", "Giant", 5.49, date.today())
-        ds.update_price("Milk", "TJ", 4.99, date.today())
+        data_store.update_price("Milk", "Giant", 5.49, date.today())
+        data_store.update_price("Milk", "TJ", 4.99, date.today())
 
-        result = runner.invoke(app, ["--json", "stats", "compare", "Milk"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "compare", "Milk"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
@@ -145,17 +137,16 @@ class TestStatsCompareCommand:
 class TestStatsSuggestCommand:
     """Tests for grocery stats suggest command."""
 
-    def test_suggest_empty(self, _setup_cli):
+    def test_suggest_empty(self, cli_data_dir):
         """Suggest command with no data."""
-        result = runner.invoke(app, ["--json", "stats", "suggest"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "suggest"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
         assert output["data"]["suggestions"] == []
 
-    def test_suggest_with_data(self, _setup_cli):
+    def test_suggest_with_data(self, cli_data_dir, data_store):
         """Suggest command finds suggestions."""
-        ds, _ = _setup_cli
         from grocery_tracker.models import FrequencyData, PurchaseRecord
         from datetime import timedelta
 
@@ -168,9 +159,9 @@ class TestStatsSuggestCommand:
                 PurchaseRecord(date=today - timedelta(days=10)),
             ],
         )
-        ds.save_frequency_data({"Milk": freq})
+        data_store.save_frequency_data({"Milk": freq})
 
-        result = runner.invoke(app, ["--json", "stats", "suggest"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "suggest"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert len(output["data"]["suggestions"]) >= 1
@@ -179,10 +170,10 @@ class TestStatsSuggestCommand:
 class TestOutOfStockReportCommand:
     """Tests for grocery out-of-stock report command."""
 
-    def test_report_basic(self, _setup_cli):
+    def test_report_basic(self, cli_data_dir):
         """Report an item as out of stock."""
         result = runner.invoke(
-            app, ["--json", "out-of-stock", "report", "Oat Milk", "Giant"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "report", "Oat Milk", "Giant"]
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
@@ -191,12 +182,13 @@ class TestOutOfStockReportCommand:
         assert output["data"]["record"]["item_name"] == "Oat Milk"
         assert output["data"]["record"]["store"] == "Giant"
 
-    def test_report_with_substitution(self, _setup_cli):
+    def test_report_with_substitution(self, cli_data_dir):
         """Report with substitution."""
         result = runner.invoke(
             app,
             [
                 "--json",
+                "--data-dir", str(cli_data_dir),
                 "out-of-stock",
                 "report",
                 "Oat Milk",
@@ -212,10 +204,10 @@ class TestOutOfStockReportCommand:
         assert output["data"]["record"]["substitution"] == "Almond Milk"
         assert output["data"]["record"]["reported_by"] == "Francisco"
 
-    def test_report_rich_mode(self, _setup_cli):
+    def test_report_rich_mode(self, cli_data_dir):
         """Report command in Rich mode doesn't crash."""
         result = runner.invoke(
-            app, ["out-of-stock", "report", "Eggs", "Giant"]
+            app, ["--data-dir", str(cli_data_dir), "out-of-stock", "report", "Eggs", "Giant"]
         )
         assert result.exit_code == 0
 
@@ -223,55 +215,55 @@ class TestOutOfStockReportCommand:
 class TestOutOfStockListCommand:
     """Tests for grocery out-of-stock list command."""
 
-    def test_list_empty(self, _setup_cli):
+    def test_list_empty(self, cli_data_dir):
         """List with no records."""
-        result = runner.invoke(app, ["--json", "out-of-stock", "list"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "list"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
         assert output["data"]["out_of_stock"] == []
 
-    def test_list_with_records(self, _setup_cli):
+    def test_list_with_records(self, cli_data_dir):
         """List returns records after reporting."""
         runner.invoke(
-            app, ["--json", "out-of-stock", "report", "Oat Milk", "Giant"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "report", "Oat Milk", "Giant"]
         )
         runner.invoke(
-            app, ["--json", "out-of-stock", "report", "Eggs", "TJ"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "report", "Eggs", "TJ"]
         )
 
-        result = runner.invoke(app, ["--json", "out-of-stock", "list"])
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "list"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert len(output["data"]["out_of_stock"]) == 2
 
-    def test_list_filter_by_item(self, _setup_cli):
+    def test_list_filter_by_item(self, cli_data_dir):
         """List filters by item name."""
         runner.invoke(
-            app, ["--json", "out-of-stock", "report", "Oat Milk", "Giant"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "report", "Oat Milk", "Giant"]
         )
         runner.invoke(
-            app, ["--json", "out-of-stock", "report", "Eggs", "TJ"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "report", "Eggs", "TJ"]
         )
 
         result = runner.invoke(
-            app, ["--json", "out-of-stock", "list", "--item", "Oat Milk"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "list", "--item", "Oat Milk"]
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert len(output["data"]["out_of_stock"]) == 1
 
-    def test_list_filter_by_store(self, _setup_cli):
+    def test_list_filter_by_store(self, cli_data_dir):
         """List filters by store."""
         runner.invoke(
-            app, ["--json", "out-of-stock", "report", "Oat Milk", "Giant"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "report", "Oat Milk", "Giant"]
         )
         runner.invoke(
-            app, ["--json", "out-of-stock", "report", "Eggs", "TJ"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "report", "Eggs", "TJ"]
         )
 
         result = runner.invoke(
-            app, ["--json", "out-of-stock", "list", "--store", "Giant"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "out-of-stock", "list", "--store", "Giant"]
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
