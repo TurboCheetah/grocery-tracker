@@ -6,32 +6,14 @@ occurred and skip if the database already has data.
 """
 
 import json
-from datetime import date, datetime, time
 from pathlib import Path
-from uuid import UUID
 
 from .data_store import DataStore
-from .sqlite_store import SQLiteStore
 from .models import (
-    GroceryItem,
-    GroceryList,
-    PriceHistory,
-    PricePoint,
-    Receipt,
-    LineItem,
-    FrequencyData,
-    PurchaseRecord,
-    OutOfStockRecord,
-    InventoryItem,
-    InventoryLocation,
-    WasteRecord,
-    WasteReason,
-    CategoryBudget,
     BudgetTracking,
-    UserPreferences,
-    Priority,
-    ItemStatus,
+    CategoryBudget,
 )
+from .sqlite_store import SQLiteStore
 
 
 class MigrationError(Exception):

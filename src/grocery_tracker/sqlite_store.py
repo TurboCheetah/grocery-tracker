@@ -4,33 +4,32 @@ This module provides SQLite database storage as an alternative to JSON files.
 It implements the same interface as DataStore for seamless switching.
 """
 
-import sqlite3
 import json
+import sqlite3
+from contextlib import contextmanager
 from datetime import date, datetime, time
 from pathlib import Path
-from typing import Any
-from uuid import UUID, uuid4
-from contextlib import contextmanager
+from uuid import UUID
 
 from .models import (
+    BudgetTracking,
+    CategoryBudget,
+    FrequencyData,
     GroceryItem,
     GroceryList,
-    PriceHistory,
-    PricePoint,
-    Receipt,
-    LineItem,
-    FrequencyData,
-    PurchaseRecord,
-    OutOfStockRecord,
     InventoryItem,
     InventoryLocation,
-    WasteRecord,
-    WasteReason,
-    CategoryBudget,
-    BudgetTracking,
-    UserPreferences,
-    Priority,
     ItemStatus,
+    LineItem,
+    OutOfStockRecord,
+    PriceHistory,
+    PricePoint,
+    Priority,
+    PurchaseRecord,
+    Receipt,
+    UserPreferences,
+    WasteReason,
+    WasteRecord,
 )
 
 

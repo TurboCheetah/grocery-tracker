@@ -2,9 +2,8 @@
 
 from .analytics import Analytics
 from .config import ConfigManager
-from .data_store import BackendType, create_data_store, DataStore
+from .data_store import BackendType, DataStore, create_data_store
 from .inventory_manager import InventoryManager
-from .sqlite_store import SQLiteStore
 from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
 from .models import (
     BudgetTracking,
@@ -34,8 +33,9 @@ from .models import (
 )
 from .output_formatter import OutputFormatter
 from .receipt_processor import ReceiptInput, ReceiptProcessor
+from .sqlite_store import SQLiteStore
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "Analytics",

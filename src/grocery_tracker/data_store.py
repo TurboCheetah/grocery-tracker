@@ -8,25 +8,23 @@ import json
 from datetime import date, datetime, time
 from enum import Enum
 from pathlib import Path
-from typing import Any, Protocol, TYPE_CHECKING
+from typing import Any, Protocol
 from uuid import UUID
 
 from .models import (
+    BudgetTracking,
+    CategoryBudget,
+    FrequencyData,
     GroceryItem,
     GroceryList,
+    InventoryItem,
+    OutOfStockRecord,
     PriceHistory,
     PricePoint,
-    Receipt,
-    FrequencyData,
     PurchaseRecord,
-    OutOfStockRecord,
-    InventoryItem,
-    InventoryLocation,
-    WasteRecord,
-    WasteReason,
-    CategoryBudget,
-    BudgetTracking,
+    Receipt,
     UserPreferences,
+    WasteRecord,
 )
 
 
@@ -57,7 +55,9 @@ class DataStoreProtocol(Protocol):
         receipt_id: UUID | None = None,
         sale: bool = False,
     ) -> None: ...
-    def get_price_history(self, item_name: str, store: str | None = None) -> PriceHistory | None: ...
+    def get_price_history(
+        self, item_name: str, store: str | None = None
+    ) -> PriceHistory | None: ...
     def load_frequency_data(self) -> dict[str, FrequencyData]: ...
     def save_frequency_data(self, frequency: dict[str, FrequencyData]) -> None: ...
     def update_frequency(

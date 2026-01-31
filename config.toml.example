@@ -3,6 +3,7 @@
 
 [data]
 storage_dir = "~/grocery-tracker/data"
+backend = "json"  # Options: "json" (default) or "sqlite"
 backup_enabled = true
 backup_interval_days = 7
 
