@@ -13,8 +13,8 @@ from .models import (
     PriceComparison,
     SpendingSummary,
     Suggestion,
-    WasteRecord,
     WasteReason,
+    WasteRecord,
 )
 
 
@@ -453,7 +453,8 @@ class Analytics:
             top_reason = max(reason_counts, key=reason_counts.get)  # type: ignore[arg-type]
             if top_reason == "spoiled" and reason_counts[top_reason] >= 3:
                 insights.append(
-                    f"{reason_counts[top_reason]} items spoiled — check fridge temperature or buy less perishables"
+                    f"{reason_counts[top_reason]} items spoiled — "
+                    "check fridge temperature or buy less perishables"
                 )
 
         return insights

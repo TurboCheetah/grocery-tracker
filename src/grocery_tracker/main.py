@@ -9,7 +9,7 @@ from rich.console import Console
 
 from .analytics import Analytics
 from .config import ConfigManager
-from .data_store import BackendType, create_data_store, DataStore
+from .data_store import BackendType, DataStore, create_data_store
 from .inventory_manager import InventoryManager
 from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
 from .models import InventoryLocation, ItemStatus, Priority, WasteReason
@@ -592,7 +592,9 @@ def inv_add(
     location: Annotated[
         InventoryLocation, typer.Option("--location", "-l", help="Storage location")
     ] = InventoryLocation.PANTRY,
-    expiration: Annotated[str | None, typer.Option("--expires", help="Expiration date (YYYY-MM-DD)")] = None,
+    expiration: Annotated[
+        str | None, typer.Option("--expires", help="Expiration date (YYYY-MM-DD)")
+    ] = None,
     threshold: Annotated[float, typer.Option("--threshold", help="Low stock threshold")] = 1.0,
     added_by: Annotated[str | None, typer.Option("--by", help="Who is adding")] = None,
 ) -> None:
@@ -652,7 +654,9 @@ def inv_list(
     location: Annotated[
         InventoryLocation | None, typer.Option("--location", "-l", help="Filter by location")
     ] = None,
-    category: Annotated[str | None, typer.Option("--category", "-c", help="Filter by category")] = None,
+    category: Annotated[
+        str | None, typer.Option("--category", "-c", help="Filter by category")
+    ] = None,
 ) -> None:
     """View household inventory."""
     try:
@@ -781,7 +785,9 @@ def waste_log(
 @waste_app.command("list")
 def waste_list(
     item: Annotated[str | None, typer.Option("--item", "-i", help="Filter by item")] = None,
-    reason: Annotated[WasteReason | None, typer.Option("--reason", "-r", help="Filter by reason")] = None,
+    reason: Annotated[
+        WasteReason | None, typer.Option("--reason", "-r", help="Filter by reason")
+    ] = None,
 ) -> None:
     """List waste records."""
     try:

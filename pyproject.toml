@@ -1,6 +1,6 @@
 [project]
 name = "grocery-tracker"
-version = "0.1.0"
+version = "1.0.0"
 description = "Intelligent grocery list and inventory management"
 authors = [{name = "Turbo", email = "dev@turbo.ooo"}]
 requires-python = ">=3.12"
