@@ -301,6 +301,10 @@ class TestDealsPersistence:
         assert loaded is not None
         assert loaded.redeemed is True
 
+    def test_get_deal_invalid_id(self, data_store):
+        """Invalid deal ID returns None."""
+        assert data_store.get_deal("not-a-uuid") is None
+
 
 class TestSavingsPersistence:
     """Tests for savings persistence."""

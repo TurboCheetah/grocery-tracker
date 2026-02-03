@@ -805,7 +805,10 @@ class DataStore:
             Deal or None
         """
         if isinstance(deal_id, str):
-            deal_id = UUID(deal_id)
+            try:
+                deal_id = UUID(deal_id)
+            except (ValueError, TypeError):
+                return None
 
         deals = self.load_deals()
         for deal in deals:
