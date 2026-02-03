@@ -6,8 +6,8 @@ from datetime import date, timedelta
 import pytest
 from typer.testing import CliRunner
 
-from grocery_tracker.main import app
 from grocery_tracker.data_store import DataStore
+from grocery_tracker.main import app
 
 runner = CliRunner()
 
@@ -780,7 +780,8 @@ class TestPreferencesView:
     def test_view_no_prefs(self, cli_data_dir):
         """View with no preferences set."""
         result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Francisco"]
+            app,
+            ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Francisco"],
         )
         assert result.exit_code == 0  # warns, doesn't fail
 
@@ -822,7 +823,8 @@ class TestPreferencesView:
             ],
         )
         result = runner.invoke(
-            app, ["--data-dir", str(cli_data_dir), "preferences", "view", "Francisco"]
+            app,
+            ["--data-dir", str(cli_data_dir), "preferences", "view", "Francisco"],
         )
         assert result.exit_code == 0
 

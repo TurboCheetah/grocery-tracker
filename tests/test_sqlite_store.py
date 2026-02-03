@@ -1,36 +1,36 @@
 """Tests for SQLite data store implementation."""
 
-import pytest
-from datetime import date, datetime, time
-from pathlib import Path
+from datetime import date, time
 from uuid import uuid4
 
-from grocery_tracker.sqlite_store import SQLiteStore
-from grocery_tracker.data_store import create_data_store, BackendType
+import pytest
+
+from grocery_tracker.data_store import BackendType, create_data_store
 from grocery_tracker.models import (
-    GroceryItem,
-    GroceryList,
-    Receipt,
-    LineItem,
-    PriceHistory,
-    PricePoint,
-    FrequencyData,
-    PurchaseRecord,
-    OutOfStockRecord,
-    InventoryItem,
-    InventoryLocation,
-    WasteRecord,
-    WasteReason,
-    CategoryBudget,
     BudgetTracking,
-    UserPreferences,
-    Priority,
-    ItemStatus,
+    CategoryBudget,
     Deal,
     DealType,
+    FrequencyData,
+    GroceryItem,
+    GroceryList,
+    InventoryItem,
+    InventoryLocation,
+    ItemStatus,
+    LineItem,
+    OutOfStockRecord,
+    PriceHistory,
+    PricePoint,
+    Priority,
+    PurchaseRecord,
+    Receipt,
     SavingsRecord,
     SavingsType,
+    UserPreferences,
+    WasteReason,
+    WasteRecord,
 )
+from grocery_tracker.sqlite_store import SQLiteStore
 
 
 @pytest.fixture
@@ -95,19 +95,19 @@ class TestSQLiteStoreCreation:
     def test_create_store(self, tmp_path):
         """Test that store can be created."""
         db_path = tmp_path / "test.db"
-        store = SQLiteStore(db_path=db_path)
+        SQLiteStore(db_path=db_path)
         assert db_path.exists()
 
     def test_create_store_creates_directories(self, tmp_path):
         """Test that store creates parent directories."""
         db_path = tmp_path / "nested" / "dir" / "test.db"
-        store = SQLiteStore(db_path=db_path)
+        SQLiteStore(db_path=db_path)
         assert db_path.exists()
 
     def test_create_store_via_factory(self, tmp_path):
         """Test creating store via factory function."""
         db_path = tmp_path / "factory.db"
-        store = create_data_store(BackendType.SQLITE, db_path=db_path)
+        create_data_store(BackendType.SQLITE, db_path=db_path)
         assert db_path.exists()
 
 
@@ -351,7 +351,7 @@ class TestOutOfStockOperations:
             substitution="Almond Milk",
             reported_by="Francisco",
         )
-        record_id = sqlite_store.add_out_of_stock(record)
+        sqlite_store.add_out_of_stock(record)
 
         records = sqlite_store.load_out_of_stock()
         assert len(records) == 1

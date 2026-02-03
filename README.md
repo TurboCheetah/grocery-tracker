@@ -63,7 +63,7 @@ grocery bought <item-id> --price 4.99
 ### Process Receipts
 
 ```bash
-grocery receipt process --data '{"store_name": "Giant", "transaction_date": "2024-01-15", "line_items": [{"item_name": "Milk", "quantity": 1, "unit_price": 4.99, "total_price": 4.99}], "subtotal": 4.99, "total": 5.29}'
+grocery receipt process --data '{"store_name": "Giant", "transaction_date": "2024-01-15", "line_items": [{"item_name": "Milk", "quantity": 1, "unit_price": 4.99, "total_price": 4.99, "category": "Dairy & Eggs"}], "subtotal": 4.99, "total": 5.29}'
 ```
 
 ### Price History

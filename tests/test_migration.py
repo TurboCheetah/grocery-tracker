@@ -1,30 +1,22 @@
 """Tests for JSON to SQLite migration."""
 
-import pytest
-from datetime import date, datetime
-from pathlib import Path
-from uuid import uuid4
+from datetime import date
 
-from grocery_tracker.migrate_to_sqlite import JSONToSQLiteMigrator, migrate, MigrationError
+import pytest
+
 from grocery_tracker.data_store import DataStore
-from grocery_tracker.sqlite_store import SQLiteStore
+from grocery_tracker.migrate_to_sqlite import JSONToSQLiteMigrator, migrate
 from grocery_tracker.models import (
     GroceryItem,
     GroceryList,
-    Receipt,
-    LineItem,
-    PriceHistory,
-    PricePoint,
-    FrequencyData,
-    PurchaseRecord,
-    OutOfStockRecord,
     InventoryItem,
     InventoryLocation,
-    WasteRecord,
-    WasteReason,
-    CategoryBudget,
-    BudgetTracking,
+    LineItem,
+    OutOfStockRecord,
+    Receipt,
     UserPreferences,
+    WasteReason,
+    WasteRecord,
 )
 
 

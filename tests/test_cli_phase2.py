@@ -6,9 +6,9 @@ from datetime import date
 import pytest
 from typer.testing import CliRunner
 
+from grocery_tracker.data_store import DataStore
 from grocery_tracker.main import app
 from grocery_tracker.models import LineItem, Receipt
-from grocery_tracker.data_store import DataStore
 
 runner = CliRunner()
 
@@ -96,8 +96,9 @@ class TestStatsFrequencyCommand:
 
     def test_frequency_with_data(self, cli_data_dir, data_store):
         """Frequency command returns data."""
-        from grocery_tracker.models import FrequencyData, PurchaseRecord
         from datetime import timedelta
+
+        from grocery_tracker.models import FrequencyData, PurchaseRecord
 
         today = date.today()
         freq = FrequencyData(
@@ -118,6 +119,84 @@ class TestStatsFrequencyCommand:
         assert output["success"] is True
         assert output["data"]["frequency"]["item_name"] == "Milk"
         assert output["data"]["frequency"]["average_days"] == 5.0
+
+
+class TestStatsSeasonalCommand:
+    """Tests for grocery stats seasonal command."""
+
+    def test_seasonal_no_data(self, cli_data_dir):
+        """Seasonal command warns when no data."""
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "seasonal", "Strawberries"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert "warning" in output
+
+    def test_seasonal_with_data(self, cli_data_dir, data_store):
+        """Seasonal command returns data."""
+        from grocery_tracker.models import FrequencyData, PurchaseRecord
+
+        freq = FrequencyData(
+            item_name="Strawberries",
+            category="Produce",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 5, 1)),
+                PurchaseRecord(date=date(2025, 5, 15)),
+                PurchaseRecord(date=date(2025, 6, 2)),
+                PurchaseRecord(date=date(2025, 6, 20)),
+                PurchaseRecord(date=date(2025, 7, 5)),
+                PurchaseRecord(date=date(2025, 7, 22)),
+                PurchaseRecord(date=date(2025, 12, 3)),
+            ],
+        )
+        data_store.save_frequency_data({"Strawberries": freq})
+
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "seasonal", "Strawberries"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert output["data"]["seasonal"]["season_range"] == "May-July"
+
+    def test_seasonal_all_empty(self, cli_data_dir):
+        """Seasonal command with --all returns empty list."""
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "seasonal", "--all"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert output["data"]["seasonal_items"] == []
+
+    def test_seasonal_all_with_data(self, cli_data_dir, data_store):
+        """Seasonal command with --all returns multiple items."""
+        from grocery_tracker.models import FrequencyData, PurchaseRecord
+
+        freq_strawberries = FrequencyData(
+            item_name="Strawberries",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 5, 1)),
+                PurchaseRecord(date=date(2025, 5, 15)),
+            ],
+        )
+        freq_apples = FrequencyData(
+            item_name="Apples",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 9, 1)),
+                PurchaseRecord(date=date(2025, 9, 15)),
+            ],
+        )
+        data_store.save_frequency_data({"Strawberries": freq_strawberries, "Apples": freq_apples})
+
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "seasonal", "--all"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert len(output["data"]["seasonal_items"]) == 2
 
 
 class TestStatsCompareCommand:
@@ -159,8 +238,9 @@ class TestStatsSuggestCommand:
 
     def test_suggest_with_data(self, cli_data_dir, data_store):
         """Suggest command finds suggestions."""
-        from grocery_tracker.models import FrequencyData, PurchaseRecord
         from datetime import timedelta
+
+        from grocery_tracker.models import FrequencyData, PurchaseRecord
 
         today = date.today()
         freq = FrequencyData(
