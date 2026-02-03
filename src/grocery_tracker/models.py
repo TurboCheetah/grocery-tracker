@@ -225,6 +225,27 @@ class FrequencyData(BaseModel):
         return "low"
 
 
+class SeasonalMonth(BaseModel):
+    """Monthly purchase counts for seasonal analysis."""
+
+    month: int
+    month_name: str
+    purchase_count: int
+    percentage: float
+
+
+class SeasonalPattern(BaseModel):
+    """Seasonal purchasing pattern for an item."""
+
+    item_name: str
+    total_purchases: int
+    months: list[SeasonalMonth] = Field(default_factory=list)
+    peak_months: list[str] = Field(default_factory=list)
+    season_range: str | None = None
+    year_round: bool = False
+    confidence: str = "low"
+
+
 class OutOfStockRecord(BaseModel):
     """Record of an item being out of stock at a store."""
 

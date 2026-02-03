@@ -1,5 +1,7 @@
 """Analytics and intelligence for Grocery Tracker."""
 
+import calendar
+import math
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -11,6 +13,8 @@ from .models import (
     FrequencyData,
     OutOfStockRecord,
     PriceComparison,
+    SeasonalMonth,
+    SeasonalPattern,
     SpendingSummary,
     Suggestion,
     WasteReason,
@@ -268,6 +272,61 @@ class Analytics:
         """
         return self.data_store.get_frequency(item_name)
 
+    def get_seasonal_pattern(self, item_name: str) -> SeasonalPattern | None:
+        """Get seasonal purchase patterns for an item.
+
+        Args:
+            item_name: Item name
+
+        Returns:
+            SeasonalPattern or None if insufficient data
+        """
+        freq = self._get_frequency_case_insensitive(item_name)
+        if not freq or not freq.purchase_history:
+            return None
+
+        month_counts: dict[int, int] = {month: 0 for month in range(1, 13)}
+        for record in freq.purchase_history:
+            month_counts[record.date.month] += 1
+
+        total_purchases = sum(month_counts.values())
+        if total_purchases == 0:
+            return None
+
+        months_with_purchases = sorted(
+            [month for month, count in month_counts.items() if count > 0]
+        )
+        max_count = max(month_counts.values())
+        threshold = max(1, math.ceil(max_count * 0.6))
+        peak_month_numbers = sorted(
+            [month for month, count in month_counts.items() if count >= threshold and count > 0]
+        )
+
+        year_round = len(months_with_purchases) >= 9
+        season_range = "Year-round" if year_round else self._format_season_range(
+            peak_month_numbers, month_counts
+        )
+
+        months = [
+            SeasonalMonth(
+                month=month,
+                month_name=calendar.month_name[month],
+                purchase_count=month_counts[month],
+                percentage=round(month_counts[month] / total_purchases * 100, 1),
+            )
+            for month in months_with_purchases
+        ]
+
+        return SeasonalPattern(
+            item_name=freq.item_name,
+            total_purchases=total_purchases,
+            months=months,
+            peak_months=[calendar.month_name[m] for m in peak_month_numbers],
+            season_range=season_range,
+            year_round=year_round,
+            confidence=self._confidence_from_count(total_purchases),
+        )
+
     def update_frequency_from_receipt(self, receipt) -> None:
         """Update frequency data from a processed receipt.
 
@@ -283,6 +342,65 @@ class Analytics:
                 store=receipt.store_name,
                 category=cat,
             )
+
+    def _get_frequency_case_insensitive(self, item_name: str) -> FrequencyData | None:
+        """Fetch frequency data with case-insensitive fallback."""
+        freq = self.data_store.get_frequency(item_name)
+        if freq is not None:
+            return freq
+
+        all_frequency = self.data_store.load_frequency_data()
+        for key, value in all_frequency.items():
+            if key.lower() == item_name.lower():
+                return value
+        return None
+
+    def _format_season_range(
+        self, peak_month_numbers: list[int], month_counts: dict[int, int]
+    ) -> str | None:
+        """Format a season range from peak months."""
+        if not peak_month_numbers:
+            return None
+
+        groups = self._group_consecutive_months(peak_month_numbers)
+        if not groups:
+            return None
+
+        def group_score(group: list[int]) -> tuple[int, int, int]:
+            return (
+                sum(month_counts[month] for month in group),
+                len(group),
+                -group[0],
+            )
+
+        best_group = max(groups, key=group_score)
+        start_name = calendar.month_name[best_group[0]]
+        end_name = calendar.month_name[best_group[-1]]
+        if start_name == end_name:
+            return start_name
+        return f"{start_name}-{end_name}"
+
+    def _group_consecutive_months(self, months: list[int]) -> list[list[int]]:
+        """Group consecutive months into ranges."""
+        if not months:
+            return []
+
+        sorted_months = sorted(set(months))
+        groups: list[list[int]] = [[sorted_months[0]]]
+        for month in sorted_months[1:]:
+            if month == groups[-1][-1] + 1:
+                groups[-1].append(month)
+            else:
+                groups.append([month])
+        return groups
+
+    def _confidence_from_count(self, count: int) -> str:
+        """Confidence level based on total purchase count."""
+        if count >= 10:
+            return "high"
+        if count >= 5:
+            return "medium"
+        return "low"
 
     def _guess_category(self, item_name: str) -> str:
         """Guess category from item name. Simple heuristic."""

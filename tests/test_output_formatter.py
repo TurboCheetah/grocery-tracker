@@ -378,6 +378,57 @@ class TestOutputFormatterRich:
         output = console.file.getvalue()
         assert "Eggs" in output
 
+    def test_render_seasonal_pattern(self):
+        """Renders seasonal pattern data."""
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        formatter = OutputFormatter(json_mode=False)
+        formatter.console = console
+
+        formatter.output(
+            {
+                "success": True,
+                "data": {
+                    "seasonal": {
+                        "item_name": "Strawberries",
+                        "season_range": "May-July",
+                        "confidence": "medium",
+                        "total_purchases": 7,
+                        "peak_months": ["May", "June", "July"],
+                        "months": [
+                            {
+                                "month": 5,
+                                "month_name": "May",
+                                "purchase_count": 2,
+                                "percentage": 28.6,
+                            },
+                            {
+                                "month": 6,
+                                "month_name": "June",
+                                "purchase_count": 2,
+                                "percentage": 28.6,
+                            },
+                            {
+                                "month": 7,
+                                "month_name": "July",
+                                "purchase_count": 2,
+                                "percentage": 28.6,
+                            },
+                            {
+                                "month": 12,
+                                "month_name": "December",
+                                "purchase_count": 1,
+                                "percentage": 14.3,
+                            },
+                        ],
+                    }
+                },
+            }
+        )
+        output = strip_ansi(console.file.getvalue())
+        assert "Seasonal Pattern" in output
+        assert "Strawberries" in output
+        assert "May-July" in output
+
     def test_output_with_message_rich(self):
         """Rich output with message shows checkmark."""
         console = Console(file=StringIO(), force_terminal=True, width=80)
