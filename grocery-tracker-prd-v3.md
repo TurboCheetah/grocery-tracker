@@ -276,7 +276,7 @@ monthly_budget = config.budget.monthly_limit
 
 ### Primary Users
 
-**Alice** — Primary household grocery planner, detail-oriented data tracker  
+**Alice** — Primary user, detail-oriented shopper, drives analytics requirements  
 **Bob** — Household member, grocery co-manager, shared shopping responsibilities
 
 ### User Stories
@@ -2177,7 +2177,7 @@ def temp_data_dir(tmp_path):
 - Recipe cost calculator
 
 ### External Integrations
-- Notes/database sync
+- Notion database sync
 - Google Sheets export
 - YNAB/Mint budget sync
 - Instacart/grocery delivery API integration
