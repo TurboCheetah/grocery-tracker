@@ -460,11 +460,39 @@ def stats_frequency(
 
 @stats_app.command("seasonal")
 def stats_seasonal(
-    item: Annotated[str, typer.Argument(help="Item name")],
+    item: Annotated[
+        str | None, typer.Argument(help="Item name (omit when using --all)")
+    ] = None,
+    all_items: Annotated[
+        bool, typer.Option("--all", help="Show seasonal patterns for all items")
+    ] = False,
 ) -> None:
-    """View seasonal purchase patterns for an item."""
+    """View seasonal purchase patterns for an item or all items."""
     try:
         analytics = Analytics(data_store=get_data_store())
+        if all_items:
+            patterns = analytics.get_seasonal_patterns()
+            output_data = {
+                "success": True,
+                "data": {
+                    "seasonal_items": [p.model_dump() for p in patterns],
+                    "total_items": len(patterns),
+                },
+            }
+            formatter.output(
+                output_data,
+                (
+                    f"Seasonal patterns for {len(patterns)} items"
+                    if patterns
+                    else "No seasonal patterns"
+                ),
+            )
+            return
+
+        if not item:
+            formatter.error("Provide an item name or use --all")
+            raise typer.Exit(code=1)
+
         pattern = analytics.get_seasonal_pattern(item)
 
         if not pattern:
