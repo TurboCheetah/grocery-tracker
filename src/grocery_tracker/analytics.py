@@ -725,7 +725,8 @@ class Analytics:
 
             if savings_per_unit is None:
                 raise ValueError(
-                    "Unable to determine savings; provide --savings or both regular and paid prices."
+                    "Unable to determine savings; provide --savings or both regular and "
+                    "paid prices."
                 )
 
             total_savings = savings_per_unit * quantity
