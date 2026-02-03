@@ -55,11 +55,7 @@ class Analytics:
         receipts = self.data_store.list_receipts()
 
         # Filter to period
-        period_receipts = [
-            r
-            for r in receipts
-            if start_date <= r.transaction_date <= today
-        ]
+        period_receipts = [r for r in receipts if start_date <= r.transaction_date <= today]
 
         total_spending = sum(r.total for r in period_receipts)
         total_items = sum(len(r.line_items) for r in period_receipts)
@@ -293,24 +289,90 @@ class Analytics:
         """Guess category from item name. Simple heuristic."""
         name = item_name.lower()
 
-        produce = ["banana", "apple", "avocado", "tomato", "lettuce", "onion",
-                    "potato", "carrot", "pepper", "strawberr", "blueberr",
-                    "orange", "lemon", "lime", "grape", "mango", "pear",
-                    "celery", "broccoli", "spinach", "kale", "cucumber",
-                    "garlic", "ginger", "mushroom", "corn", "bean", "pea"]
+        produce = [
+            "banana",
+            "apple",
+            "avocado",
+            "tomato",
+            "lettuce",
+            "onion",
+            "potato",
+            "carrot",
+            "pepper",
+            "strawberr",
+            "blueberr",
+            "orange",
+            "lemon",
+            "lime",
+            "grape",
+            "mango",
+            "pear",
+            "celery",
+            "broccoli",
+            "spinach",
+            "kale",
+            "cucumber",
+            "garlic",
+            "ginger",
+            "mushroom",
+            "corn",
+            "bean",
+            "pea",
+        ]
         dairy = ["milk", "cheese", "yogurt", "butter", "cream", "egg"]
-        meat = ["chicken", "beef", "pork", "turkey", "fish", "salmon",
-                "shrimp", "steak", "bacon", "sausage", "ham"]
-        bakery = ["bread", "bagel", "muffin", "roll", "cake", "donut",
-                  "croissant", "tortilla", "bun"]
+        meat = [
+            "chicken",
+            "beef",
+            "pork",
+            "turkey",
+            "fish",
+            "salmon",
+            "shrimp",
+            "steak",
+            "bacon",
+            "sausage",
+            "ham",
+        ]
+        bakery = [
+            "bread",
+            "bagel",
+            "muffin",
+            "roll",
+            "cake",
+            "donut",
+            "croissant",
+            "tortilla",
+            "bun",
+        ]
         frozen = ["frozen", "ice cream", "pizza"]
-        beverages = ["juice", "soda", "water", "coffee", "tea", "wine",
-                     "beer", "kombucha"]
-        snacks = ["chips", "cookie", "cracker", "popcorn", "pretzel",
-                  "candy", "chocolate", "granola bar", "nut"]
-        pantry = ["rice", "pasta", "sauce", "oil", "vinegar", "sugar",
-                  "flour", "salt", "spice", "cereal", "oat", "can",
-                  "soup", "broth"]
+        beverages = ["juice", "soda", "water", "coffee", "tea", "wine", "beer", "kombucha"]
+        snacks = [
+            "chips",
+            "cookie",
+            "cracker",
+            "popcorn",
+            "pretzel",
+            "candy",
+            "chocolate",
+            "granola bar",
+            "nut",
+        ]
+        pantry = [
+            "rice",
+            "pasta",
+            "sauce",
+            "oil",
+            "vinegar",
+            "sugar",
+            "flour",
+            "salt",
+            "spice",
+            "cereal",
+            "oat",
+            "can",
+            "soup",
+            "broth",
+        ]
 
         categories = [
             (produce, "Produce"),
@@ -387,10 +449,7 @@ class Analytics:
             start_date = today.replace(day=1)
 
         records = self.data_store.load_waste_log()
-        period_records = [
-            r for r in records
-            if start_date <= r.waste_logged_date <= today
-        ]
+        period_records = [r for r in records if start_date <= r.waste_logged_date <= today]
 
         total_cost = sum(r.estimated_cost or 0.0 for r in period_records)
         total_items = len(period_records)
@@ -445,9 +504,7 @@ class Analytics:
                     + " — consider buying less"
                 )
             elif count >= 2:
-                insights.append(
-                    f"{item} wasted {count} times — buy smaller quantities?"
-                )
+                insights.append(f"{item} wasted {count} times — buy smaller quantities?")
 
         # Most common reason
         reason_counts: dict[str, int] = defaultdict(int)
@@ -641,9 +698,7 @@ class Analytics:
         """Log a savings record manually."""
         if savings_amount is None:
             if regular_price is None or paid_price is None:
-                raise ValueError(
-                    "Provide savings amount or both regular and paid prices."
-                )
+                raise ValueError("Provide savings amount or both regular and paid prices.")
             savings_amount = (regular_price - paid_price) * quantity
 
         savings_amount = round(max(savings_amount, 0.0), 2)
@@ -674,9 +729,7 @@ class Analytics:
             start_date = today.replace(day=1)
 
         records = self.data_store.load_savings()
-        period_records = [
-            r for r in records if start_date <= r.date <= today
-        ]
+        period_records = [r for r in records if start_date <= r.date <= today]
 
         total_savings = sum(r.savings_amount for r in period_records)
         savings_count = len(period_records)
@@ -694,9 +747,7 @@ class Analytics:
 
         top_items = [
             {"item": item, "total": round(total, 2)}
-            for item, total in sorted(
-                item_totals.items(), key=lambda x: x[1], reverse=True
-            )[:5]
+            for item, total in sorted(item_totals.items(), key=lambda x: x[1], reverse=True)[:5]
         ]
 
         return SavingsSummary(

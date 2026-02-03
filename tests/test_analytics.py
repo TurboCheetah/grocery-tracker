@@ -265,9 +265,7 @@ class TestSuggestions:
 
         # Create OOS record (low priority)
         for _ in range(3):
-            data_store.add_out_of_stock(
-                OutOfStockRecord(item_name="Oat Milk", store="Giant")
-            )
+            data_store.add_out_of_stock(OutOfStockRecord(item_name="Oat Milk", store="Giant"))
 
         suggestions = analytics.get_suggestions()
         if len(suggestions) >= 2:

@@ -24,7 +24,12 @@ class TestRenderSpending:
                     "receipt_count": 8,
                     "item_count": 45,
                     "categories": [
-                        {"category": "Produce", "total": 80.00, "percentage": 17.8, "item_count": 15},
+                        {
+                            "category": "Produce",
+                            "total": 80.00,
+                            "percentage": 17.8,
+                            "item_count": 15,
+                        },
                     ],
                     "budget_limit": None,
                     "budget_remaining": None,

@@ -517,9 +517,7 @@ def oos_report(
     substitution: Annotated[
         str | None, typer.Option("--sub", "-s", help="What was bought instead")
     ] = None,
-    reported_by: Annotated[
-        str | None, typer.Option("--by", help="Who is reporting")
-    ] = None,
+    reported_by: Annotated[str | None, typer.Option("--by", help="Who is reporting")] = None,
 ) -> None:
     """Report an item as out of stock at a store."""
     try:
@@ -546,12 +544,8 @@ def oos_report(
 
 @oos_app.command("list")
 def oos_list(
-    item: Annotated[
-        str | None, typer.Option("--item", "-i", help="Filter by item name")
-    ] = None,
-    store: Annotated[
-        str | None, typer.Option("--store", "-s", help="Filter by store")
-    ] = None,
+    item: Annotated[str | None, typer.Option("--item", "-i", help="Filter by item name")] = None,
+    store: Annotated[str | None, typer.Option("--store", "-s", help="Filter by store")] = None,
 ) -> None:
     """List out-of-stock records."""
     try:
@@ -913,18 +907,10 @@ def deals_add(
     start_date: Annotated[
         str | None, typer.Option("--start", help="Start date (YYYY-MM-DD)")
     ] = None,
-    end_date: Annotated[
-        str | None, typer.Option("--end", help="End date (YYYY-MM-DD)")
-    ] = None,
-    code: Annotated[
-        str | None, typer.Option("--code", help="Coupon code")
-    ] = None,
-    source: Annotated[
-        str | None, typer.Option("--source", help="Flyer/app source")
-    ] = None,
-    notes: Annotated[
-        str | None, typer.Option("--notes", "-n", help="Notes")
-    ] = None,
+    end_date: Annotated[str | None, typer.Option("--end", help="End date (YYYY-MM-DD)")] = None,
+    code: Annotated[str | None, typer.Option("--code", help="Coupon code")] = None,
+    source: Annotated[str | None, typer.Option("--source", help="Flyer/app source")] = None,
+    notes: Annotated[str | None, typer.Option("--notes", "-n", help="Notes")] = None,
 ) -> None:
     """Add a coupon or sale deal."""
     try:
@@ -1036,9 +1022,7 @@ def deals_list(
 @deals_app.command("redeem")
 def deals_redeem(
     deal_id: Annotated[str, typer.Argument(help="Deal ID to redeem")],
-    quantity: Annotated[
-        float, typer.Option("--quantity", "-q", help="Quantity purchased")
-    ] = 1.0,
+    quantity: Annotated[float, typer.Option("--quantity", "-q", help="Quantity purchased")] = 1.0,
     date_str: Annotated[
         str | None, typer.Option("--date", help="Redemption date (YYYY-MM-DD)")
     ] = None,
@@ -1051,9 +1035,7 @@ def deals_redeem(
     paid_price: Annotated[
         float | None, typer.Option("--paid-price", help="Paid price per unit")
     ] = None,
-    notes: Annotated[
-        str | None, typer.Option("--notes", "-n", help="Notes")
-    ] = None,
+    notes: Annotated[str | None, typer.Option("--notes", "-n", help="Notes")] = None,
 ) -> None:
     """Redeem a deal and log savings."""
     try:
@@ -1074,10 +1056,7 @@ def deals_redeem(
 
         output_data = {
             "success": True,
-            "message": (
-                f"Redeemed deal for {deal.item_name} "
-                f"(saved ${record.savings_amount:.2f})"
-            ),
+            "message": (f"Redeemed deal for {deal.item_name} (saved ${record.savings_amount:.2f})"),
             "data": {
                 "deal": deal.model_dump(),
                 "savings": record.model_dump(),
@@ -1100,30 +1079,20 @@ app.add_typer(savings_app, name="savings")
 @savings_app.command("log")
 def savings_log(
     item: Annotated[str, typer.Argument(help="Item name")],
-    store: Annotated[
-        str | None, typer.Option("--store", "-s", help="Store name")
-    ] = None,
-    amount: Annotated[
-        float | None, typer.Option("--amount", "-a", help="Savings amount")
-    ] = None,
+    store: Annotated[str | None, typer.Option("--store", "-s", help="Store name")] = None,
+    amount: Annotated[float | None, typer.Option("--amount", "-a", help="Savings amount")] = None,
     regular_price: Annotated[
         float | None, typer.Option("--regular-price", help="Regular price per unit")
     ] = None,
     paid_price: Annotated[
         float | None, typer.Option("--paid-price", help="Paid price per unit")
     ] = None,
-    quantity: Annotated[
-        float, typer.Option("--quantity", "-q", help="Quantity purchased")
-    ] = 1.0,
+    quantity: Annotated[float, typer.Option("--quantity", "-q", help="Quantity purchased")] = 1.0,
     savings_type: Annotated[
         SavingsType, typer.Option("--type", "-t", help="Savings type")
     ] = SavingsType.MANUAL,
-    date_str: Annotated[
-        str | None, typer.Option("--date", help="Date (YYYY-MM-DD)")
-    ] = None,
-    notes: Annotated[
-        str | None, typer.Option("--notes", "-n", help="Notes")
-    ] = None,
+    date_str: Annotated[str | None, typer.Option("--date", help="Date (YYYY-MM-DD)")] = None,
+    notes: Annotated[str | None, typer.Option("--notes", "-n", help="Notes")] = None,
 ) -> None:
     """Log a savings record."""
     try:
@@ -1160,9 +1129,7 @@ def savings_log(
 
 @savings_app.command("list")
 def savings_list(
-    store: Annotated[
-        str | None, typer.Option("--store", "-s", help="Filter by store")
-    ] = None,
+    store: Annotated[str | None, typer.Option("--store", "-s", help="Filter by store")] = None,
     savings_type: Annotated[
         SavingsType | None, typer.Option("--type", "-t", help="Filter by type")
     ] = None,
@@ -1250,12 +1217,8 @@ def prefs_set(
     dietary: Annotated[
         list[str] | None, typer.Option("--dietary", help="Dietary restriction")
     ] = None,
-    allergen: Annotated[
-        list[str] | None, typer.Option("--allergen", help="Allergen")
-    ] = None,
-    favorite: Annotated[
-        list[str] | None, typer.Option("--favorite", help="Favorite item")
-    ] = None,
+    allergen: Annotated[list[str] | None, typer.Option("--allergen", help="Allergen")] = None,
+    favorite: Annotated[list[str] | None, typer.Option("--favorite", help="Favorite item")] = None,
 ) -> None:
     """Set user preferences."""
     try:

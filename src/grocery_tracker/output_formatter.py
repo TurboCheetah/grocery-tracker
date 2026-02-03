@@ -261,24 +261,19 @@ Total: ${receipt["total"]:.2f}""",
         spending = data["data"]["spending"]
 
         self.console.print(f"\n[bold]Spending Summary ({spending['period']})[/bold]")
-        self.console.print(
-            f"Period: {spending['start_date']} to {spending['end_date']}"
-        )
+        self.console.print(f"Period: {spending['start_date']} to {spending['end_date']}")
         self.console.print(f"Total spent: ${spending['total_spending']:.2f}")
         self.console.print(f"Receipts: {spending['receipt_count']}")
         self.console.print(f"Items purchased: {spending['item_count']}")
 
         if spending.get("budget_limit") is not None:
             self.console.print(
-                f"\nBudget: ${spending['total_spending']:.2f} / "
-                f"${spending['budget_limit']:.2f}"
+                f"\nBudget: ${spending['total_spending']:.2f} / ${spending['budget_limit']:.2f}"
             )
             remaining = spending.get("budget_remaining", 0)
             pct = spending.get("budget_percentage", 0)
             color = "green" if remaining > 0 else "red"
-            self.console.print(
-                f"Remaining: [{color}]${remaining:.2f}[/{color}] ({pct:.1f}% used)"
-            )
+            self.console.print(f"Remaining: [{color}]${remaining:.2f}[/{color}] ({pct:.1f}% used)")
 
         if spending.get("categories"):
             self.console.print("\n[dim]By category:[/dim]")
@@ -673,9 +668,7 @@ Total: ${receipt["total"]:.2f}""",
         summary = data["data"]["savings_summary"]
 
         self.console.print(f"\n[bold]Savings Summary ({summary['period']})[/bold]")
-        self.console.print(
-            f"Period: {summary['start_date']} to {summary['end_date']}"
-        )
+        self.console.print(f"Period: {summary['start_date']} to {summary['end_date']}")
         self.console.print(f"Total saved: ${summary['total_savings']:.2f}")
         self.console.print(f"Records: {summary['savings_count']}")
         self.console.print(f"Average savings: ${summary['average_savings']:.2f}")
@@ -693,9 +686,7 @@ Total: ${receipt["total"]:.2f}""",
         if summary.get("top_items"):
             self.console.print("\n[dim]Top items:[/dim]")
             for item in summary["top_items"]:
-                self.console.print(
-                    f"  {item.get('item')}: ${item.get('total', 0.0):.2f}"
-                )
+                self.console.print(f"  {item.get('item')}: ${item.get('total', 0.0):.2f}")
 
     def _render_preferences(self, data: dict) -> None:
         """Render user preferences."""

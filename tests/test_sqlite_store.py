@@ -26,6 +26,10 @@ from grocery_tracker.models import (
     UserPreferences,
     Priority,
     ItemStatus,
+    Deal,
+    DealType,
+    SavingsRecord,
+    SavingsType,
 )
 
 
@@ -355,15 +359,19 @@ class TestOutOfStockOperations:
 
     def test_get_out_of_stock_for_item(self, sqlite_store):
         """Test filtering out-of-stock by item."""
-        sqlite_store.add_out_of_stock(OutOfStockRecord(
-            item_name="Oat Milk", store="Giant", recorded_date=date(2026, 1, 25)
-        ))
-        sqlite_store.add_out_of_stock(OutOfStockRecord(
-            item_name="Oat Milk", store="Trader Joe's", recorded_date=date(2026, 1, 26)
-        ))
-        sqlite_store.add_out_of_stock(OutOfStockRecord(
-            item_name="Almond Milk", store="Giant", recorded_date=date(2026, 1, 25)
-        ))
+        sqlite_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="Giant", recorded_date=date(2026, 1, 25))
+        )
+        sqlite_store.add_out_of_stock(
+            OutOfStockRecord(
+                item_name="Oat Milk", store="Trader Joe's", recorded_date=date(2026, 1, 26)
+            )
+        )
+        sqlite_store.add_out_of_stock(
+            OutOfStockRecord(
+                item_name="Almond Milk", store="Giant", recorded_date=date(2026, 1, 25)
+            )
+        )
 
         # All records for oat milk
         records = sqlite_store.get_out_of_stock_for_item("Oat Milk")
@@ -524,6 +532,36 @@ class TestUserPreferencesOperations:
         assert loaded["Loki"].dietary_restrictions == ["vegetarian"]
 
 
+class TestDealsAndSavingsOperations:
+    """Tests for deals and savings operations."""
+
+    def test_save_deals_clears_referenced_deals(self, sqlite_store):
+        """Saving deals should not violate savings FK constraints."""
+        deal = Deal(
+            item_name="Eggs",
+            store="Giant",
+            deal_type=DealType.SALE,
+            regular_price=3.99,
+            deal_price=2.99,
+        )
+        sqlite_store.add_deal(deal)
+
+        record = SavingsRecord(
+            item_name="Eggs",
+            store="Giant",
+            savings_amount=1.00,
+            savings_type=SavingsType.SALE,
+            deal_id=deal.id,
+        )
+        sqlite_store.add_savings(record)
+
+        sqlite_store.save_deals([])
+
+        savings_records = sqlite_store.load_savings()
+        assert len(savings_records) == 1
+        assert savings_records[0].deal_id is None
+
+
 class TestDataIntegrity:
     """Tests for data integrity across operations."""
 
@@ -543,14 +581,14 @@ class TestDataIntegrity:
         item = GroceryItem(
             name="Ben & Jerry's Ice Cream",
             quantity=1,
-            notes="Get the \"Half Baked\" flavor",
+            notes='Get the "Half Baked" flavor',
         )
         grocery_list = GroceryList(items=[item])
         sqlite_store.save_list(grocery_list)
 
         loaded = sqlite_store.load_list()
         assert loaded.items[0].name == "Ben & Jerry's Ice Cream"
-        assert 'Half Baked' in loaded.items[0].notes
+        assert "Half Baked" in loaded.items[0].notes
 
     def test_unicode_characters(self, sqlite_store):
         """Test handling of unicode characters."""

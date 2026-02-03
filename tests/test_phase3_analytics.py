@@ -79,18 +79,14 @@ class TestWasteSummary:
 
     def test_weekly_summary(self, analytics, data_store):
         """Weekly summary uses correct period."""
-        data_store.add_waste_record(
-            WasteRecord(item_name="Yogurt", reason=WasteReason.SPOILED)
-        )
+        data_store.add_waste_record(WasteRecord(item_name="Yogurt", reason=WasteReason.SPOILED))
         summary = analytics.waste_summary(period="weekly")
         assert summary["period"] == "weekly"
         assert summary["total_items_wasted"] == 1
 
     def test_yearly_summary(self, analytics, data_store):
         """Yearly summary uses correct period."""
-        data_store.add_waste_record(
-            WasteRecord(item_name="Rice", reason=WasteReason.OTHER)
-        )
+        data_store.add_waste_record(WasteRecord(item_name="Rice", reason=WasteReason.OTHER))
         summary = analytics.waste_summary(period="yearly")
         assert summary["period"] == "yearly"
 
@@ -100,9 +96,7 @@ class TestWasteSummary:
             data_store.add_waste_record(
                 WasteRecord(item_name="Bananas", reason=WasteReason.OVERRIPE)
             )
-        data_store.add_waste_record(
-            WasteRecord(item_name="Milk", reason=WasteReason.SPOILED)
-        )
+        data_store.add_waste_record(WasteRecord(item_name="Milk", reason=WasteReason.SPOILED))
 
         summary = analytics.waste_summary()
         assert summary["most_wasted"][0]["item"] == "Bananas"
