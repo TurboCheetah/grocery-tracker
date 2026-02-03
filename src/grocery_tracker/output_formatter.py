@@ -83,6 +83,8 @@ class OutputFormatter:
             self._render_out_of_stock(data)
         elif "frequency" in data.get("data", {}):
             self._render_frequency(data)
+        elif "seasonal_items" in data.get("data", {}):
+            self._render_seasonal_list(data)
         elif "seasonal" in data.get("data", {}):
             self._render_seasonal(data)
         elif "inventory_item" in data.get("data", {}):
@@ -327,9 +329,12 @@ Total: ${receipt["total"]:.2f}""",
         self.console.print("\n[bold]Smart Suggestions[/bold]")
 
         for s in suggestions:
-            icon = {"restock": "\u26a0", "price_alert": "$", "out_of_stock": "\u2717"}.get(
-                s["type"], "\u2022"
-            )
+            icon = {
+                "restock": "\u26a0",
+                "price_alert": "$",
+                "out_of_stock": "\u2717",
+                "seasonal": "S",
+            }.get(s["type"], "\u2022")
             priority_color = {
                 "high": "red",
                 "medium": "yellow",
@@ -411,6 +416,37 @@ Total: ${receipt["total"]:.2f}""",
                     f"{month['percentage']:.1f}%",
                 )
             self.console.print(table)
+
+    def _render_seasonal_list(self, data: dict) -> None:
+        """Render seasonal patterns for all items."""
+        seasonal_items = data["data"]["seasonal_items"]
+
+        if not seasonal_items:
+            self.console.print("[dim]No seasonal patterns available[/dim]")
+            return
+
+        self.console.print("\n[bold]Seasonal Patterns[/bold]")
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Item")
+        table.add_column("Season")
+        table.add_column("Peak Months")
+        table.add_column("Purchases", justify="right")
+        table.add_column("Confidence")
+
+        for pattern in seasonal_items:
+            season = pattern.get("season_range") or "-"
+            peaks = ", ".join(pattern.get("peak_months", [])) or "-"
+            table.add_row(
+                pattern["item_name"],
+                season,
+                peaks,
+                str(pattern.get("total_purchases", 0)),
+                pattern.get("confidence", "low"),
+            )
+
+        self.console.print(table)
+        if "total_items" in data.get("data", {}):
+            self.console.print(f"\nTotal items: {data['data']['total_items']}")
 
     def _render_inventory_item(self, data: dict) -> None:
         """Render a single inventory item."""

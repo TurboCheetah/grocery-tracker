@@ -25,7 +25,7 @@ A comprehensive grocery tracking and household inventory management system desig
 
 **Last updated**: February 3, 2026  
 
-- Phase 2 — Seasonal patterns (Purchase Frequency Analysis): Implemented (analytics computation, `stats seasonal` CLI, Rich/JSON output, tests)
+- Phase 2 — Seasonal patterns (Purchase Frequency Analysis): Implemented (analytics computation, `stats seasonal` CLI for single/all items, seasonal suggestions, Rich/JSON output, tests)
 
 ---
 

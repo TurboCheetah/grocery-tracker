@@ -182,6 +182,51 @@ class Analytics:
                         )
                     )
 
+        # Seasonal purchase suggestions
+        today = date.today()
+        current_month = calendar.month_name[today.month]
+        seasonal_threshold_days = 30
+        for item_name, freq in frequency.items():
+            pattern = self._build_seasonal_pattern(freq)
+            if not pattern or pattern.year_round:
+                continue
+            if pattern.confidence == "low":
+                continue
+            if current_month not in pattern.peak_months:
+                continue
+
+            last_purchased = freq.last_purchased
+            if last_purchased is None:
+                continue
+            days_since = (today - last_purchased).days
+            if days_since < seasonal_threshold_days:
+                continue
+
+            season_label = (
+                pattern.season_range
+                or ", ".join(pattern.peak_months)
+                or "in season"
+            )
+
+            suggestions.append(
+                Suggestion(
+                    type="seasonal",
+                    item_name=item_name,
+                    message=(
+                        f"Typically bought {season_label}; "
+                        f"last purchase {days_since} days ago"
+                    ),
+                    priority="low",
+                    data={
+                        "season_range": pattern.season_range,
+                        "peak_months": pattern.peak_months,
+                        "last_purchased": last_purchased.isoformat(),
+                        "days_since": days_since,
+                        "current_month": current_month,
+                    },
+                )
+            )
+
         # Price alert suggestions
         history = self.data_store.load_price_history()
         for item_name, stores in history.items():
@@ -282,7 +327,54 @@ class Analytics:
             SeasonalPattern or None if insufficient data
         """
         freq = self._get_frequency_case_insensitive(item_name)
-        if not freq or not freq.purchase_history:
+        if not freq:
+            return None
+        return self._build_seasonal_pattern(freq)
+
+    def get_seasonal_patterns(self) -> list[SeasonalPattern]:
+        """Get seasonal purchase patterns for all items."""
+        patterns: list[SeasonalPattern] = []
+        for freq in self.data_store.load_frequency_data().values():
+            pattern = self._build_seasonal_pattern(freq)
+            if pattern:
+                patterns.append(pattern)
+
+        return sorted(
+            patterns,
+            key=lambda p: (-p.total_purchases, p.item_name.lower()),
+        )
+
+    def update_frequency_from_receipt(self, receipt) -> None:
+        """Update frequency data from a processed receipt.
+
+        Args:
+            receipt: A Receipt object
+        """
+        for item in receipt.line_items:
+            cat = self._guess_category(item.item_name)
+            self.data_store.update_frequency(
+                item_name=item.item_name,
+                purchase_date=receipt.transaction_date,
+                quantity=item.quantity,
+                store=receipt.store_name,
+                category=cat,
+            )
+
+    def _get_frequency_case_insensitive(self, item_name: str) -> FrequencyData | None:
+        """Fetch frequency data with case-insensitive fallback."""
+        freq = self.data_store.get_frequency(item_name)
+        if freq is not None:
+            return freq
+
+        all_frequency = self.data_store.load_frequency_data()
+        for key, value in all_frequency.items():
+            if key.lower() == item_name.lower():
+                return value
+        return None
+
+    def _build_seasonal_pattern(self, freq: FrequencyData) -> SeasonalPattern | None:
+        """Build seasonal pattern data from frequency records."""
+        if not freq.purchase_history:
             return None
 
         month_counts: dict[int, int] = {month: 0 for month in range(1, 13)}
@@ -326,34 +418,6 @@ class Analytics:
             year_round=year_round,
             confidence=self._confidence_from_count(total_purchases),
         )
-
-    def update_frequency_from_receipt(self, receipt) -> None:
-        """Update frequency data from a processed receipt.
-
-        Args:
-            receipt: A Receipt object
-        """
-        for item in receipt.line_items:
-            cat = self._guess_category(item.item_name)
-            self.data_store.update_frequency(
-                item_name=item.item_name,
-                purchase_date=receipt.transaction_date,
-                quantity=item.quantity,
-                store=receipt.store_name,
-                category=cat,
-            )
-
-    def _get_frequency_case_insensitive(self, item_name: str) -> FrequencyData | None:
-        """Fetch frequency data with case-insensitive fallback."""
-        freq = self.data_store.get_frequency(item_name)
-        if freq is not None:
-            return freq
-
-        all_frequency = self.data_store.load_frequency_data()
-        for key, value in all_frequency.items():
-            if key.lower() == item_name.lower():
-                return value
-        return None
 
     def _format_season_range(
         self, peak_month_numbers: list[int], month_counts: dict[int, int]

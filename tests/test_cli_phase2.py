@@ -151,6 +151,46 @@ class TestStatsSeasonalCommand:
         assert output["success"] is True
         assert output["data"]["seasonal"]["season_range"] == "May-July"
 
+    def test_seasonal_all_empty(self, cli_data_dir):
+        """Seasonal command with --all returns empty list."""
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "seasonal", "--all"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert output["data"]["seasonal_items"] == []
+
+    def test_seasonal_all_with_data(self, cli_data_dir, data_store):
+        """Seasonal command with --all returns multiple items."""
+        from grocery_tracker.models import FrequencyData, PurchaseRecord
+
+        freq_strawberries = FrequencyData(
+            item_name="Strawberries",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 5, 1)),
+                PurchaseRecord(date=date(2025, 5, 15)),
+            ],
+        )
+        freq_apples = FrequencyData(
+            item_name="Apples",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 9, 1)),
+                PurchaseRecord(date=date(2025, 9, 15)),
+            ],
+        )
+        data_store.save_frequency_data(
+            {"Strawberries": freq_strawberries, "Apples": freq_apples}
+        )
+
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "seasonal", "--all"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert len(output["data"]["seasonal_items"]) == 2
+
 
 class TestStatsCompareCommand:
     """Tests for grocery stats compare command."""

@@ -249,6 +249,25 @@ class TestSuggestions:
         assert len(oos) >= 1
         assert oos[0].item_name == "Oat Milk"
 
+    def test_seasonal_suggestion(self, analytics, data_store):
+        """Suggests seasonal items during their peak months."""
+        today = date.today()
+        season_month = today.month
+        history = [
+            PurchaseRecord(date=date(today.year - 3, season_month, 1)),
+            PurchaseRecord(date=date(today.year - 3, season_month, 15)),
+            PurchaseRecord(date=date(today.year - 2, season_month, 1)),
+            PurchaseRecord(date=date(today.year - 2, season_month, 15)),
+            PurchaseRecord(date=date(today.year - 1, season_month, 10)),
+        ]
+        freq = FrequencyData(item_name="Blueberries", purchase_history=history)
+        data_store.save_frequency_data({"Blueberries": freq})
+
+        suggestions = analytics.get_suggestions()
+        seasonal = [s for s in suggestions if s.type == "seasonal"]
+        assert len(seasonal) >= 1
+        assert seasonal[0].item_name == "Blueberries"
+
     def test_suggestions_sorted_by_priority(self, analytics, data_store):
         """Suggestions are sorted by priority (high first)."""
         today = date.today()
@@ -371,6 +390,32 @@ class TestSeasonalPatterns:
         assert result is not None
         assert result.year_round is True
         assert result.season_range == "Year-round"
+
+    def test_seasonal_patterns_list(self, analytics, data_store):
+        """Returns seasonal patterns for all items."""
+        freq_apples = FrequencyData(
+            item_name="Apples",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 9, 1)),
+                PurchaseRecord(date=date(2025, 9, 15)),
+                PurchaseRecord(date=date(2025, 10, 1)),
+            ],
+        )
+        freq_strawberries = FrequencyData(
+            item_name="Strawberries",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 5, 1)),
+                PurchaseRecord(date=date(2025, 5, 15)),
+            ],
+        )
+        data_store.save_frequency_data(
+            {"Apples": freq_apples, "Strawberries": freq_strawberries}
+        )
+
+        patterns = analytics.get_seasonal_patterns()
+        assert len(patterns) == 2
+        assert patterns[0].item_name == "Apples"
+        assert patterns[1].item_name == "Strawberries"
 
 
 class TestCategoryGuessing:
