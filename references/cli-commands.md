@@ -303,13 +303,20 @@ grocery stats --period monthly --budget 500 --json
 {
   "success": true,
   "data": {
-    "stats": {
+    "spending": {
       "period": "monthly",
-      "current_spending": 450.00,
-      "budget": 500.00,
-      "remaining": 50.00,
-      "percentage_used": 90,
-      "categories": {"Produce": 80.00, "Dairy & Eggs": 65.00}
+      "start_date": "2026-01-01",
+      "end_date": "2026-01-31",
+      "total_spending": 450.00,
+      "receipt_count": 6,
+      "item_count": 42,
+      "categories": [
+        {"category": "Produce", "total": 80.00, "percentage": 17.8, "item_count": 12},
+        {"category": "Dairy & Eggs", "total": 65.00, "percentage": 14.4, "item_count": 9}
+      ],
+      "budget_limit": 500.00,
+      "budget_remaining": 50.00,
+      "budget_percentage": 90.0
     }
   }
 }
@@ -328,11 +335,16 @@ grocery stats frequency "milk" --json
 {
   "success": true,
   "data": {
-    "item": "milk",
-    "average_days_between_purchases": 5.2,
-    "last_purchased": "2026-01-23",
-    "next_expected_purchase": "2026-01-28",
-    "confidence": "high"
+    "frequency": {
+      "item_name": "milk",
+      "category": "Dairy & Eggs",
+      "average_days": 5.2,
+      "last_purchased": "2026-01-23",
+      "days_since": 4,
+      "next_expected": "2026-01-28",
+      "confidence": "high",
+      "total_purchases": 8
+    }
   }
 }
 ```
@@ -350,13 +362,53 @@ grocery stats compare "milk" --json
 {
   "success": true,
   "data": {
-    "item": "milk",
-    "stores": {
-      "Giant": {"price": 5.99, "last_seen": "2026-01-23"},
-      "Trader Joe's": {"price": 4.99, "last_seen": "2026-01-20"}
-    },
-    "cheapest_store": "Trader Joe's",
-    "potential_savings": 1.00
+    "comparison": {
+      "item_name": "milk",
+      "stores": {
+        "Giant": 5.99,
+        "Trader Joe's": 4.99
+      },
+      "cheapest_store": "Trader Joe's",
+      "cheapest_price": 4.99,
+      "savings": 1.00
+    }
+  }
+}
+```
+
+### stats bulk
+
+Bulk buying analysis.
+
+```bash
+grocery stats bulk --days 90 --json
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "bulk_buying": {
+      "lookback_days": 90,
+      "recommendations": [
+        {
+          "item_name": "Soda",
+          "store": "Giant",
+          "single_quantity": 1,
+          "single_unit_price": 2.00,
+          "bulk_quantity": 12,
+          "bulk_unit_price": 1.50,
+          "unit_savings": 0.50,
+          "unit_savings_percent": 25.0,
+          "estimated_monthly_quantity": 10.0,
+          "estimated_monthly_savings": 5.00,
+          "single_purchase_count": 3,
+          "bulk_purchase_count": 2,
+          "confidence": "medium"
+        }
+      ]
+    }
   }
 }
 ```
@@ -375,8 +427,20 @@ grocery stats suggest --json
   "success": true,
   "data": {
     "suggestions": [
-      {"type": "restock", "item": "milk", "priority": "high", "message": "Usually buy every 5 days, last purchase 6 days ago"},
-      {"type": "price_alert", "item": "eggs", "priority": "medium", "message": "Price increased 20%"}
+      {
+        "type": "restock",
+        "item_name": "milk",
+        "priority": "high",
+        "message": "Usually buy every 5 days, last purchase 6 days ago",
+        "data": {"average_interval": 5, "days_since": 6}
+      },
+      {
+        "type": "price_alert",
+        "item_name": "eggs",
+        "priority": "medium",
+        "message": "Price at Giant is $5.00 (+20% vs avg $4.00)",
+        "data": {"store": "Giant", "current_price": 5.00, "average_price": 4.00}
+      }
     ]
   }
 }

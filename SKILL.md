@@ -27,6 +27,7 @@ grocery price history "milk" --json
 grocery stats --period monthly --json
 grocery stats frequency "milk" --json
 grocery stats compare "milk" --json
+grocery stats bulk --json
 grocery stats suggest --json
 
 # Inventory
@@ -154,6 +155,12 @@ Present proactively when appropriate:
 - Restock reminders based on purchase patterns
 - Price alerts for increases
 - Out-of-stock warnings
+
+### Bulk Buying Analysis
+```bash
+grocery stats bulk --json
+```
+Present: Bulk vs single pricing, per-unit savings, estimated monthly savings.
 
 ## Inventory Management
 

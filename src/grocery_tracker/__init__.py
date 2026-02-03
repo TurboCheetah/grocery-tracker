@@ -7,6 +7,7 @@ from .inventory_manager import InventoryManager
 from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
 from .models import (
     BudgetTracking,
+    BulkBuyingRecommendation,
     Category,
     CategoryBudget,
     CategorySpending,
@@ -43,6 +44,7 @@ __all__ = [
     "Analytics",
     "BackendType",
     "BudgetTracking",
+    "BulkBuyingRecommendation",
     "Category",
     "CategoryBudget",
     "CategorySpending",
