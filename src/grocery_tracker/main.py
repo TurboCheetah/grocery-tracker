@@ -539,9 +539,7 @@ def stats_bulk(
     lookback_days: Annotated[
         int, typer.Option("--days", "-d", help="Days of history to estimate usage")
     ] = 90,
-    limit: Annotated[
-        int, typer.Option("--limit", "-l", help="Max recommendations to return")
-    ] = 5,
+    limit: Annotated[int, typer.Option("--limit", "-l", help="Max recommendations to return")] = 5,
     min_savings_pct: Annotated[
         float,
         typer.Option("--min-savings-pct", help="Minimum percent savings per unit"),

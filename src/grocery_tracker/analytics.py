@@ -313,9 +313,7 @@ class Analytics:
                     "total_price": item.total_price,
                     "date": receipt.transaction_date,
                 }
-                purchases_by_item_store[
-                    (item.item_name, receipt.store_name)
-                ].append(entry)
+                purchases_by_item_store[(item.item_name, receipt.store_name)].append(entry)
                 purchases_by_item[item.item_name].append(entry)
 
         monthly_usage: dict[str, float | None] = {}
@@ -349,8 +347,7 @@ class Analytics:
             single_avg = self._average_unit_price(single_entries)
 
             bulk_candidates = {
-                qty: self._average_unit_price(quantity_groups[qty])
-                for qty in quantities[1:]
+                qty: self._average_unit_price(quantity_groups[qty]) for qty in quantities[1:]
             }
             bulk_qty = min(bulk_candidates, key=bulk_candidates.get)
             bulk_avg = bulk_candidates[bulk_qty]
@@ -362,9 +359,7 @@ class Analytics:
                 continue
 
             unit_savings = single_avg - bulk_avg
-            unit_savings_pct = (
-                (unit_savings / single_avg * 100) if single_avg > 0 else 0.0
-            )
+            unit_savings_pct = (unit_savings / single_avg * 100) if single_avg > 0 else 0.0
 
             if unit_savings < min_savings_abs and unit_savings_pct < min_savings_pct:
                 continue
@@ -398,10 +393,7 @@ class Analytics:
         best_by_item: dict[str, BulkBuyingRecommendation] = {}
         for rec in recommendations:
             current = best_by_item.get(rec.item_name)
-            if (
-                current is None
-                or rec.estimated_monthly_savings > current.estimated_monthly_savings
-            ):
+            if current is None or rec.estimated_monthly_savings > current.estimated_monthly_savings:
                 best_by_item[rec.item_name] = rec
 
         sorted_recs = sorted(
@@ -461,9 +453,8 @@ class Analytics:
         if freq and freq.average_days_between_purchases:
             avg_days = freq.average_days_between_purchases
             if avg_days and avg_days > 0:
-                avg_qty = (
-                    sum(p.quantity for p in freq.purchase_history)
-                    / len(freq.purchase_history)
+                avg_qty = sum(p.quantity for p in freq.purchase_history) / len(
+                    freq.purchase_history
                 )
                 return (30 / avg_days) * avg_qty
 

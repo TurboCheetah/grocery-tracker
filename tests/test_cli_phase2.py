@@ -264,9 +264,7 @@ class TestStatsBulkCommand:
 
     def test_bulk_empty(self, cli_data_dir):
         """Bulk command returns empty recommendations when no data."""
-        result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "bulk"]
-        )
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "bulk"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
@@ -299,9 +297,7 @@ class TestStatsBulkCommand:
         data_store.update_price("Soda", "Giant", 2.00, today, receipt_id=rid1)
         data_store.update_price("Soda", "Giant", 1.50, today, receipt_id=rid2)
 
-        result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "bulk"]
-        )
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "bulk"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         recs = output["data"]["bulk_buying"]["recommendations"]

@@ -480,15 +480,9 @@ class TestBulkBuyingAnalysis:
         rid2 = data_store.save_receipt(receipt2)
         rid3 = data_store.save_receipt(receipt3)
 
-        data_store.update_price(
-            "Soda", "Giant", 2.00, receipt1.transaction_date, receipt_id=rid1
-        )
-        data_store.update_price(
-            "Soda", "Giant", 1.50, receipt2.transaction_date, receipt_id=rid2
-        )
-        data_store.update_price(
-            "Soda", "Giant", 1.40, receipt3.transaction_date, receipt_id=rid3
-        )
+        data_store.update_price("Soda", "Giant", 2.00, receipt1.transaction_date, receipt_id=rid1)
+        data_store.update_price("Soda", "Giant", 1.50, receipt2.transaction_date, receipt_id=rid2)
+        data_store.update_price("Soda", "Giant", 1.40, receipt3.transaction_date, receipt_id=rid3)
 
         recommendations = analytics.bulk_buying_analysis()
         assert recommendations
