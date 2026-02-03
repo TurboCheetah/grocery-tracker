@@ -21,6 +21,14 @@ A comprehensive grocery tracking and household inventory management system desig
 
 ---
 
+## Implementation Status
+
+**Last updated**: February 3, 2026  
+
+- Phase 2 — Seasonal patterns (Purchase Frequency Analysis): Implemented (analytics computation, `stats seasonal` CLI for single/all items, seasonal suggestions, Rich/JSON output, tests)
+
+---
+
 ## Technical Architecture
 
 ### Technology Stack: **Python with uv**
@@ -370,6 +378,7 @@ monthly_budget = config.budget.monthly_limit
   "line_items": [
     {
       "item_name": "string",
+      "category": "string | null",
       "quantity": "number",
       "unit_price": "number",
       "total_price": "number",
@@ -385,6 +394,8 @@ monthly_budget = config.budget.monthly_limit
   "created_at": "ISO8601 timestamp"
 }
 ```
+
+**Note:** `line_items[].category` is optional but recommended. The skill/LLM layer should populate it for better analytics.
 
 #### 1.4 Bought vs Still Needed Tracking
 - **Automatic detection** from receipt OCR
@@ -1307,13 +1318,14 @@ When user uploads a receipt image:
      "store_name": "string",
      "transaction_date": "YYYY-MM-DD",
      "transaction_time": "HH:MM",
-     "line_items": [
-       {
-         "item_name": "string",
-         "quantity": number,
-         "unit_price": number,
-         "total_price": number
-       }
+      "line_items": [
+        {
+          "item_name": "string",
+          "category": "string | null",
+          "quantity": number,
+          "unit_price": number,
+          "total_price": number
+        }
      ],
      "subtotal": number,
      "tax": number,
@@ -1487,8 +1499,8 @@ RECEIPT_JSON='{
   "transaction_date": "2026-01-25",
   "transaction_time": "14:32",
   "line_items": [
-    {"item_name": "Bananas", "quantity": 3, "unit_price": 0.49, "total_price": 1.47},
-    {"item_name": "Milk", "quantity": 1, "unit_price": 5.49, "total_price": 5.49}
+    {"item_name": "Bananas", "quantity": 3, "unit_price": 0.49, "total_price": 1.47, "category": "Produce"},
+    {"item_name": "Milk", "quantity": 1, "unit_price": 5.49, "total_price": 5.49, "category": "Dairy & Eggs"}
   ],
   "subtotal": 6.96,
   "tax": 0.00,
@@ -2274,6 +2286,7 @@ def temp_data_dir(tmp_path):
   "line_items": [
     {
       "item_name": "BANANAS",
+      "category": "Produce",
       "quantity": 3,
       "unit_price": 0.49,
       "total_price": 1.47,
@@ -2281,6 +2294,7 @@ def temp_data_dir(tmp_path):
     },
     {
       "item_name": "EGGS LARGE DOZEN",
+      "category": "Dairy & Eggs",
       "quantity": 1,
       "unit_price": 4.99,
       "total_price": 4.99,

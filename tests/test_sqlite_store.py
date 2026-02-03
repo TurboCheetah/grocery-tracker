@@ -1,32 +1,32 @@
 """Tests for SQLite data store implementation."""
 
-import pytest
-from datetime import date, datetime, time
-from pathlib import Path
+from datetime import date, time
 from uuid import uuid4
 
-from grocery_tracker.sqlite_store import SQLiteStore
-from grocery_tracker.data_store import create_data_store, BackendType
+import pytest
+
+from grocery_tracker.data_store import BackendType, create_data_store
 from grocery_tracker.models import (
+    BudgetTracking,
+    CategoryBudget,
+    FrequencyData,
     GroceryItem,
     GroceryList,
-    Receipt,
-    LineItem,
-    PriceHistory,
-    PricePoint,
-    FrequencyData,
-    PurchaseRecord,
-    OutOfStockRecord,
     InventoryItem,
     InventoryLocation,
-    WasteRecord,
-    WasteReason,
-    CategoryBudget,
-    BudgetTracking,
-    UserPreferences,
-    Priority,
     ItemStatus,
+    LineItem,
+    OutOfStockRecord,
+    PriceHistory,
+    PricePoint,
+    Priority,
+    PurchaseRecord,
+    Receipt,
+    UserPreferences,
+    WasteReason,
+    WasteRecord,
 )
+from grocery_tracker.sqlite_store import SQLiteStore
 
 
 @pytest.fixture
@@ -91,19 +91,19 @@ class TestSQLiteStoreCreation:
     def test_create_store(self, tmp_path):
         """Test that store can be created."""
         db_path = tmp_path / "test.db"
-        store = SQLiteStore(db_path=db_path)
+        SQLiteStore(db_path=db_path)
         assert db_path.exists()
 
     def test_create_store_creates_directories(self, tmp_path):
         """Test that store creates parent directories."""
         db_path = tmp_path / "nested" / "dir" / "test.db"
-        store = SQLiteStore(db_path=db_path)
+        SQLiteStore(db_path=db_path)
         assert db_path.exists()
 
     def test_create_store_via_factory(self, tmp_path):
         """Test creating store via factory function."""
         db_path = tmp_path / "factory.db"
-        store = create_data_store(BackendType.SQLITE, db_path=db_path)
+        create_data_store(BackendType.SQLITE, db_path=db_path)
         assert db_path.exists()
 
 
@@ -347,7 +347,7 @@ class TestOutOfStockOperations:
             substitution="Almond Milk",
             reported_by="Francisco",
         )
-        record_id = sqlite_store.add_out_of_stock(record)
+        sqlite_store.add_out_of_stock(record)
 
         records = sqlite_store.load_out_of_stock()
         assert len(records) == 1
@@ -355,15 +355,19 @@ class TestOutOfStockOperations:
 
     def test_get_out_of_stock_for_item(self, sqlite_store):
         """Test filtering out-of-stock by item."""
-        sqlite_store.add_out_of_stock(OutOfStockRecord(
-            item_name="Oat Milk", store="Giant", recorded_date=date(2026, 1, 25)
-        ))
-        sqlite_store.add_out_of_stock(OutOfStockRecord(
-            item_name="Oat Milk", store="Trader Joe's", recorded_date=date(2026, 1, 26)
-        ))
-        sqlite_store.add_out_of_stock(OutOfStockRecord(
-            item_name="Almond Milk", store="Giant", recorded_date=date(2026, 1, 25)
-        ))
+        sqlite_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="Giant", recorded_date=date(2026, 1, 25))
+        )
+        sqlite_store.add_out_of_stock(
+            OutOfStockRecord(
+                item_name="Oat Milk", store="Trader Joe's", recorded_date=date(2026, 1, 26)
+            )
+        )
+        sqlite_store.add_out_of_stock(
+            OutOfStockRecord(
+                item_name="Almond Milk", store="Giant", recorded_date=date(2026, 1, 25)
+            )
+        )
 
         # All records for oat milk
         records = sqlite_store.get_out_of_stock_for_item("Oat Milk")
@@ -543,14 +547,14 @@ class TestDataIntegrity:
         item = GroceryItem(
             name="Ben & Jerry's Ice Cream",
             quantity=1,
-            notes="Get the \"Half Baked\" flavor",
+            notes='Get the "Half Baked" flavor',
         )
         grocery_list = GroceryList(items=[item])
         sqlite_store.save_list(grocery_list)
 
         loaded = sqlite_store.load_list()
         assert loaded.items[0].name == "Ben & Jerry's Ice Cream"
-        assert 'Half Baked' in loaded.items[0].notes
+        assert "Half Baked" in loaded.items[0].notes
 
     def test_unicode_characters(self, sqlite_store):
         """Test handling of unicode characters."""

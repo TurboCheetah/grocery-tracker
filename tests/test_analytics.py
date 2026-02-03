@@ -1,14 +1,11 @@
 """Tests for analytics module."""
 
 from datetime import date, timedelta
-from unittest.mock import MagicMock
 
 import pytest
 
 from grocery_tracker.analytics import Analytics
-from grocery_tracker.data_store import DataStore
 from grocery_tracker.models import (
-    CategorySpending,
     FrequencyData,
     LineItem,
     OutOfStockRecord,
@@ -16,7 +13,6 @@ from grocery_tracker.models import (
     PricePoint,
     PurchaseRecord,
     Receipt,
-    Suggestion,
 )
 
 
@@ -249,6 +245,25 @@ class TestSuggestions:
         assert len(oos) >= 1
         assert oos[0].item_name == "Oat Milk"
 
+    def test_seasonal_suggestion(self, analytics, data_store):
+        """Suggests seasonal items during their peak months."""
+        today = date.today()
+        season_month = today.month
+        history = [
+            PurchaseRecord(date=date(today.year - 3, season_month, 1)),
+            PurchaseRecord(date=date(today.year - 3, season_month, 15)),
+            PurchaseRecord(date=date(today.year - 2, season_month, 1)),
+            PurchaseRecord(date=date(today.year - 2, season_month, 15)),
+            PurchaseRecord(date=date(today.year - 1, season_month, 10)),
+        ]
+        freq = FrequencyData(item_name="Blueberries", purchase_history=history)
+        data_store.save_frequency_data({"Blueberries": freq})
+
+        suggestions = analytics.get_suggestions()
+        seasonal = [s for s in suggestions if s.type == "seasonal"]
+        assert len(seasonal) >= 1
+        assert seasonal[0].item_name == "Blueberries"
+
     def test_suggestions_sorted_by_priority(self, analytics, data_store):
         """Suggestions are sorted by priority (high first)."""
         today = date.today()
@@ -265,9 +280,7 @@ class TestSuggestions:
 
         # Create OOS record (low priority)
         for _ in range(3):
-            data_store.add_out_of_stock(
-                OutOfStockRecord(item_name="Oat Milk", store="Giant")
-            )
+            data_store.add_out_of_stock(OutOfStockRecord(item_name="Oat Milk", store="Giant"))
 
         suggestions = analytics.get_suggestions()
         if len(suggestions) >= 2:
@@ -327,37 +340,72 @@ class TestFrequencySummary:
         assert result.average_days_between_purchases == 5.0
 
 
-class TestCategoryGuessing:
-    """Tests for category guessing heuristic."""
+class TestSeasonalPatterns:
+    """Tests for seasonal purchase patterns."""
 
-    def test_produce(self, analytics):
-        assert analytics._guess_category("Bananas") == "Produce"
-        assert analytics._guess_category("organic apples") == "Produce"
+    def test_no_data(self, analytics):
+        """Returns None when no frequency data exists."""
+        result = analytics.get_seasonal_pattern("Strawberries")
+        assert result is None
 
-    def test_dairy(self, analytics):
-        assert analytics._guess_category("Whole Milk") == "Dairy & Eggs"
-        assert analytics._guess_category("Sharp Cheese") == "Dairy & Eggs"
+    def test_seasonal_pattern_detects_peak_months(self, analytics, data_store):
+        """Detects peak months and season range."""
+        freq = FrequencyData(
+            item_name="Strawberries",
+            category="Produce",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 5, 1)),
+                PurchaseRecord(date=date(2025, 5, 15)),
+                PurchaseRecord(date=date(2025, 6, 2)),
+                PurchaseRecord(date=date(2025, 6, 20)),
+                PurchaseRecord(date=date(2025, 7, 5)),
+                PurchaseRecord(date=date(2025, 7, 22)),
+                PurchaseRecord(date=date(2025, 12, 3)),
+            ],
+        )
+        data_store.save_frequency_data({"Strawberries": freq})
 
-    def test_meat(self, analytics):
-        assert analytics._guess_category("Chicken Breast") == "Meat & Seafood"
+        result = analytics.get_seasonal_pattern("Strawberries")
+        assert result is not None
+        assert result.season_range == "May-July"
+        assert result.peak_months == ["May", "June", "July"]
+        assert result.total_purchases == 7
+        assert result.confidence == "medium"
 
-    def test_bakery(self, analytics):
-        assert analytics._guess_category("Sourdough Bread") == "Bakery"
+    def test_year_round_pattern(self, analytics, data_store):
+        """Flags year-round purchasing when most months have activity."""
+        purchase_history = [PurchaseRecord(date=date(2025, month, 1)) for month in range(1, 13)]
+        freq = FrequencyData(item_name="Milk", purchase_history=purchase_history)
+        data_store.save_frequency_data({"Milk": freq})
 
-    def test_beverages(self, analytics):
-        assert analytics._guess_category("Kombucha") == "Beverages"
+        result = analytics.get_seasonal_pattern("Milk")
+        assert result is not None
+        assert result.year_round is True
+        assert result.season_range == "Year-round"
 
-    def test_snacks(self, analytics):
-        assert analytics._guess_category("Pretzels") == "Snacks"
+    def test_seasonal_patterns_list(self, analytics, data_store):
+        """Returns seasonal patterns for all items."""
+        freq_apples = FrequencyData(
+            item_name="Apples",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 9, 1)),
+                PurchaseRecord(date=date(2025, 9, 15)),
+                PurchaseRecord(date=date(2025, 10, 1)),
+            ],
+        )
+        freq_strawberries = FrequencyData(
+            item_name="Strawberries",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 5, 1)),
+                PurchaseRecord(date=date(2025, 5, 15)),
+            ],
+        )
+        data_store.save_frequency_data({"Apples": freq_apples, "Strawberries": freq_strawberries})
 
-    def test_pantry(self, analytics):
-        assert analytics._guess_category("Brown Rice") == "Pantry & Canned Goods"
-
-    def test_frozen(self, analytics):
-        assert analytics._guess_category("Frozen Pizza") == "Frozen Foods"
-
-    def test_unknown(self, analytics):
-        assert analytics._guess_category("Detergent") == "Other"
+        patterns = analytics.get_seasonal_patterns()
+        assert len(patterns) == 2
+        assert patterns[0].item_name == "Apples"
+        assert patterns[1].item_name == "Strawberries"
 
 
 class TestUpdateFrequencyFromReceipt:
