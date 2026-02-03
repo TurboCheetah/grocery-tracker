@@ -1,30 +1,22 @@
 """Tests for JSON to SQLite migration."""
 
-import pytest
-from datetime import date, datetime
-from pathlib import Path
-from uuid import uuid4
+from datetime import date
 
-from grocery_tracker.migrate_to_sqlite import JSONToSQLiteMigrator, migrate, MigrationError
+import pytest
+
 from grocery_tracker.data_store import DataStore
-from grocery_tracker.sqlite_store import SQLiteStore
+from grocery_tracker.migrate_to_sqlite import JSONToSQLiteMigrator, migrate
 from grocery_tracker.models import (
     GroceryItem,
     GroceryList,
-    Receipt,
-    LineItem,
-    PriceHistory,
-    PricePoint,
-    FrequencyData,
-    PurchaseRecord,
-    OutOfStockRecord,
     InventoryItem,
     InventoryLocation,
-    WasteRecord,
-    WasteReason,
-    CategoryBudget,
-    BudgetTracking,
+    LineItem,
+    OutOfStockRecord,
+    Receipt,
     UserPreferences,
+    WasteReason,
+    WasteRecord,
 )
 
 
@@ -65,32 +57,40 @@ def populated_json_store(json_store):
     json_store.update_frequency("Bananas", date(2026, 1, 25), category="Produce")
 
     # Add out of stock record
-    json_store.add_out_of_stock(OutOfStockRecord(
-        item_name="Oat Milk",
-        store="Giant",
-        recorded_date=date(2026, 1, 25),
-    ))
+    json_store.add_out_of_stock(
+        OutOfStockRecord(
+            item_name="Oat Milk",
+            store="Giant",
+            recorded_date=date(2026, 1, 25),
+        )
+    )
 
     # Add inventory
-    json_store.save_inventory([
-        InventoryItem(
-            item_name="Rice",
-            location=InventoryLocation.PANTRY,
-            purchased_date=date(2026, 1, 20),
-        ),
-    ])
+    json_store.save_inventory(
+        [
+            InventoryItem(
+                item_name="Rice",
+                location=InventoryLocation.PANTRY,
+                purchased_date=date(2026, 1, 20),
+            ),
+        ]
+    )
 
     # Add waste record
-    json_store.add_waste_record(WasteRecord(
-        item_name="Lettuce",
-        reason=WasteReason.SPOILED,
-    ))
+    json_store.add_waste_record(
+        WasteRecord(
+            item_name="Lettuce",
+            reason=WasteReason.SPOILED,
+        )
+    )
 
     # Add user preferences
-    json_store.save_user_preferences(UserPreferences(
-        user="Francisco",
-        brand_preferences={"milk": "Organic Valley"},
-    ))
+    json_store.save_user_preferences(
+        UserPreferences(
+            user="Francisco",
+            brand_preferences={"milk": "Organic Valley"},
+        )
+    )
 
     return json_store
 
@@ -289,6 +289,7 @@ class TestMigrationConvenienceFunction:
 
         # Copy JSON data to expected location
         import shutil
+
         shutil.copytree(populated_json_store.data_dir, tmp_path / "data")
 
         stats = migrate()

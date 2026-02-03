@@ -18,6 +18,7 @@ from .sqlite_store import SQLiteStore
 
 class MigrationError(Exception):
     """Raised when migration encounters an error."""
+
     pass
 
 
@@ -153,10 +154,7 @@ class JSONToSQLiteMigrator:
             self.sqlite_store.save_frequency_data(frequency)
 
         items_count = len(frequency)
-        records_count = sum(
-            len(freq.purchase_history)
-            for freq in frequency.values()
-        )
+        records_count = sum(len(freq.purchase_history) for freq in frequency.values())
 
         self.stats["frequency_items"] = items_count
         self.stats["purchase_records"] = records_count
@@ -222,10 +220,7 @@ class JSONToSQLiteMigrator:
 
         count = 0
         for month, budget_data in all_budgets.items():
-            cat_budgets = [
-                CategoryBudget(**cb)
-                for cb in budget_data.get("category_budgets", [])
-            ]
+            cat_budgets = [CategoryBudget(**cb) for cb in budget_data.get("category_budgets", [])]
 
             budget = BudgetTracking(
                 month=month,

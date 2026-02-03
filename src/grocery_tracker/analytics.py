@@ -54,11 +54,7 @@ class Analytics:
         receipts = self.data_store.list_receipts()
 
         # Filter to period
-        period_receipts = [
-            r
-            for r in receipts
-            if start_date <= r.transaction_date <= today
-        ]
+        period_receipts = [r for r in receipts if start_date <= r.transaction_date <= today]
 
         total_spending = sum(r.total for r in period_receipts)
         total_items = sum(len(r.line_items) for r in period_receipts)
@@ -202,19 +198,14 @@ class Analytics:
             if days_since < seasonal_threshold_days:
                 continue
 
-            season_label = (
-                pattern.season_range
-                or ", ".join(pattern.peak_months)
-                or "in season"
-            )
+            season_label = pattern.season_range or ", ".join(pattern.peak_months) or "in season"
 
             suggestions.append(
                 Suggestion(
                     type="seasonal",
                     item_name=item_name,
                     message=(
-                        f"Typically bought {season_label}; "
-                        f"last purchase {days_since} days ago"
+                        f"Typically bought {season_label}; last purchase {days_since} days ago"
                     ),
                     priority="low",
                     data={
@@ -395,8 +386,10 @@ class Analytics:
         )
 
         year_round = len(months_with_purchases) >= 9
-        season_range = "Year-round" if year_round else self._format_season_range(
-            peak_month_numbers, month_counts
+        season_range = (
+            "Year-round"
+            if year_round
+            else self._format_season_range(peak_month_numbers, month_counts)
         )
 
         months = [
@@ -470,24 +463,90 @@ class Analytics:
         """Guess category from item name. Simple heuristic."""
         name = item_name.lower()
 
-        produce = ["banana", "apple", "avocado", "tomato", "lettuce", "onion",
-                    "potato", "carrot", "pepper", "strawberr", "blueberr",
-                    "orange", "lemon", "lime", "grape", "mango", "pear",
-                    "celery", "broccoli", "spinach", "kale", "cucumber",
-                    "garlic", "ginger", "mushroom", "corn", "bean", "pea"]
+        produce = [
+            "banana",
+            "apple",
+            "avocado",
+            "tomato",
+            "lettuce",
+            "onion",
+            "potato",
+            "carrot",
+            "pepper",
+            "strawberr",
+            "blueberr",
+            "orange",
+            "lemon",
+            "lime",
+            "grape",
+            "mango",
+            "pear",
+            "celery",
+            "broccoli",
+            "spinach",
+            "kale",
+            "cucumber",
+            "garlic",
+            "ginger",
+            "mushroom",
+            "corn",
+            "bean",
+            "pea",
+        ]
         dairy = ["milk", "cheese", "yogurt", "butter", "cream", "egg"]
-        meat = ["chicken", "beef", "pork", "turkey", "fish", "salmon",
-                "shrimp", "steak", "bacon", "sausage", "ham"]
-        bakery = ["bread", "bagel", "muffin", "roll", "cake", "donut",
-                  "croissant", "tortilla", "bun"]
+        meat = [
+            "chicken",
+            "beef",
+            "pork",
+            "turkey",
+            "fish",
+            "salmon",
+            "shrimp",
+            "steak",
+            "bacon",
+            "sausage",
+            "ham",
+        ]
+        bakery = [
+            "bread",
+            "bagel",
+            "muffin",
+            "roll",
+            "cake",
+            "donut",
+            "croissant",
+            "tortilla",
+            "bun",
+        ]
         frozen = ["frozen", "ice cream", "pizza"]
-        beverages = ["juice", "soda", "water", "coffee", "tea", "wine",
-                     "beer", "kombucha"]
-        snacks = ["chips", "cookie", "cracker", "popcorn", "pretzel",
-                  "candy", "chocolate", "granola bar", "nut"]
-        pantry = ["rice", "pasta", "sauce", "oil", "vinegar", "sugar",
-                  "flour", "salt", "spice", "cereal", "oat", "can",
-                  "soup", "broth"]
+        beverages = ["juice", "soda", "water", "coffee", "tea", "wine", "beer", "kombucha"]
+        snacks = [
+            "chips",
+            "cookie",
+            "cracker",
+            "popcorn",
+            "pretzel",
+            "candy",
+            "chocolate",
+            "granola bar",
+            "nut",
+        ]
+        pantry = [
+            "rice",
+            "pasta",
+            "sauce",
+            "oil",
+            "vinegar",
+            "sugar",
+            "flour",
+            "salt",
+            "spice",
+            "cereal",
+            "oat",
+            "can",
+            "soup",
+            "broth",
+        ]
 
         categories = [
             (produce, "Produce"),
@@ -564,10 +623,7 @@ class Analytics:
             start_date = today.replace(day=1)
 
         records = self.data_store.load_waste_log()
-        period_records = [
-            r for r in records
-            if start_date <= r.waste_logged_date <= today
-        ]
+        period_records = [r for r in records if start_date <= r.waste_logged_date <= today]
 
         total_cost = sum(r.estimated_cost or 0.0 for r in period_records)
         total_items = len(period_records)
@@ -622,9 +678,7 @@ class Analytics:
                     + " — consider buying less"
                 )
             elif count >= 2:
-                insights.append(
-                    f"{item} wasted {count} times — buy smaller quantities?"
-                )
+                insights.append(f"{item} wasted {count} times — buy smaller quantities?")
 
         # Most common reason
         reason_counts: dict[str, int] = defaultdict(int)
