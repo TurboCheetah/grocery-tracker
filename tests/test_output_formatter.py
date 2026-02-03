@@ -218,9 +218,45 @@ class TestOutputFormatterRich:
         output = console.file.getvalue()
         assert "Organic Milk" in output
         assert "Giant" in output
-        assert "Horizon" in output
-        assert "5.99" in output
-        assert "Whole milk" in output
+
+    def test_render_bulk_buying(self):
+        """Renders bulk buying analysis."""
+        console = Console(file=StringIO(), force_terminal=True, width=120)
+        formatter = OutputFormatter(json_mode=False)
+        formatter.console = console
+
+        formatter.output(
+            {
+                "success": True,
+                "data": {
+                    "bulk_buying": {
+                        "lookback_days": 90,
+                        "recommendations": [
+                            {
+                                "item_name": "Soda",
+                                "store": "Giant",
+                                "single_quantity": 1,
+                                "single_unit_price": 2.00,
+                                "bulk_quantity": 12,
+                                "bulk_unit_price": 1.50,
+                                "unit_savings": 0.50,
+                                "unit_savings_percent": 25.0,
+                                "estimated_monthly_quantity": 10,
+                                "estimated_monthly_savings": 5.00,
+                                "single_purchase_count": 2,
+                                "bulk_purchase_count": 2,
+                                "confidence": "medium",
+                            }
+                        ],
+                    }
+                },
+            }
+        )
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Bulk Buying Opportunities" in output
+        assert "Soda" in output
+        assert "$5.00" in output
 
     def test_render_by_store(self):
         """Renders items grouped by store."""

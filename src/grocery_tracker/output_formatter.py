@@ -79,6 +79,8 @@ class OutputFormatter:
             self._render_price_comparison(data)
         elif "suggestions" in data.get("data", {}):
             self._render_suggestions(data)
+        elif "bulk_buying" in data.get("data", {}):
+            self._render_bulk_buying(data)
         elif "out_of_stock" in data.get("data", {}):
             self._render_out_of_stock(data)
         elif "frequency" in data.get("data", {}):
@@ -346,6 +348,45 @@ Total: ${receipt["total"]:.2f}""",
                 f"  [{priority_color}]{icon}[/{priority_color}] "
                 f"[bold]{s['item_name']}[/bold]: {s['message']}"
             )
+
+    def _render_bulk_buying(self, data: dict) -> None:
+        """Render bulk buying analysis."""
+        bulk_data = data["data"]["bulk_buying"]
+        recommendations = bulk_data.get("recommendations", [])
+
+        if not recommendations:
+            self.console.print("[dim]No bulk buying opportunities found[/dim]")
+            return
+
+        title = "Bulk Buying Opportunities"
+        if bulk_data.get("lookback_days"):
+            title += f" (last {bulk_data['lookback_days']} days)"
+
+        table = Table(title=title, show_header=True, header_style="bold cyan")
+        table.add_column("Item", style="cyan")
+        table.add_column("Store", style="green")
+        table.add_column("Single Qty", justify="right")
+        table.add_column("Single $", justify="right")
+        table.add_column("Bulk Qty", justify="right")
+        table.add_column("Bulk $", justify="right")
+        table.add_column("Savings/Unit", justify="right")
+        table.add_column("Monthly Savings", justify="right")
+        table.add_column("Confidence", justify="center")
+
+        for rec in recommendations:
+            table.add_row(
+                rec["item_name"],
+                rec.get("store", "-"),
+                str(rec["single_quantity"]),
+                f"${rec['single_unit_price']:.2f}",
+                str(rec["bulk_quantity"]),
+                f"${rec['bulk_unit_price']:.2f}",
+                f"${rec['unit_savings']:.2f}",
+                f"${rec['estimated_monthly_savings']:.2f}",
+                rec.get("confidence", "low"),
+            )
+
+        self.console.print(table)
 
     def _render_out_of_stock(self, data: dict) -> None:
         """Render out-of-stock records."""

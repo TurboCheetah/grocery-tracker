@@ -434,3 +434,60 @@ class TestUpdateFrequencyFromReceipt:
         eggs_freq = data_store.get_frequency("Eggs")
         assert eggs_freq is not None
         assert len(eggs_freq.purchase_history) == 1
+
+
+class TestBulkBuyingAnalysis:
+    """Tests for bulk buying analysis."""
+
+    def test_no_data(self, analytics):
+        """No receipts means no recommendations."""
+        recommendations = analytics.bulk_buying_analysis()
+        assert recommendations == []
+
+    def test_detects_bulk_savings(self, analytics, data_store):
+        """Detects bulk pricing savings from receipt and price history data."""
+        today = date.today()
+
+        receipt1 = Receipt(
+            store_name="Giant",
+            transaction_date=today - timedelta(days=20),
+            line_items=[
+                LineItem(item_name="Soda", quantity=1, unit_price=2.00, total_price=2.00),
+            ],
+            subtotal=2.00,
+            total=2.00,
+        )
+        receipt2 = Receipt(
+            store_name="Giant",
+            transaction_date=today - timedelta(days=10),
+            line_items=[
+                LineItem(item_name="Soda", quantity=12, unit_price=1.50, total_price=18.00),
+            ],
+            subtotal=18.00,
+            total=18.00,
+        )
+        receipt3 = Receipt(
+            store_name="Giant",
+            transaction_date=today - timedelta(days=5),
+            line_items=[
+                LineItem(item_name="Soda", quantity=12, unit_price=1.40, total_price=16.80),
+            ],
+            subtotal=16.80,
+            total=16.80,
+        )
+
+        rid1 = data_store.save_receipt(receipt1)
+        rid2 = data_store.save_receipt(receipt2)
+        rid3 = data_store.save_receipt(receipt3)
+
+        data_store.update_price("Soda", "Giant", 2.00, receipt1.transaction_date, receipt_id=rid1)
+        data_store.update_price("Soda", "Giant", 1.50, receipt2.transaction_date, receipt_id=rid2)
+        data_store.update_price("Soda", "Giant", 1.40, receipt3.transaction_date, receipt_id=rid3)
+
+        recommendations = analytics.bulk_buying_analysis()
+        assert recommendations
+        recommendation = recommendations[0]
+        assert recommendation.item_name == "Soda"
+        assert recommendation.bulk_quantity == 12
+        assert recommendation.single_quantity == 1
+        assert recommendation.estimated_monthly_savings > 0

@@ -304,6 +304,27 @@ class Suggestion(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
 
 
+# --- Phase 2 Models ---
+
+
+class BulkBuyingRecommendation(BaseModel):
+    """Bulk buying recommendation based on price and usage patterns."""
+
+    item_name: str
+    store: str
+    single_quantity: float
+    single_unit_price: float
+    bulk_quantity: float
+    bulk_unit_price: float
+    unit_savings: float
+    unit_savings_percent: float
+    estimated_monthly_quantity: float
+    estimated_monthly_savings: float
+    single_purchase_count: int
+    bulk_purchase_count: int
+    confidence: str
+
+
 # --- Phase 3 Models ---
 
 

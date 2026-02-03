@@ -95,19 +95,19 @@ class TestSQLiteStoreCreation:
     def test_create_store(self, tmp_path):
         """Test that store can be created."""
         db_path = tmp_path / "test.db"
-        SQLiteStore(db_path=db_path)
+        _ = SQLiteStore(db_path=db_path)
         assert db_path.exists()
 
     def test_create_store_creates_directories(self, tmp_path):
         """Test that store creates parent directories."""
         db_path = tmp_path / "nested" / "dir" / "test.db"
-        SQLiteStore(db_path=db_path)
+        _ = SQLiteStore(db_path=db_path)
         assert db_path.exists()
 
     def test_create_store_via_factory(self, tmp_path):
         """Test creating store via factory function."""
         db_path = tmp_path / "factory.db"
-        create_data_store(BackendType.SQLITE, db_path=db_path)
+        _ = create_data_store(BackendType.SQLITE, db_path=db_path)
         assert db_path.exists()
 
 
@@ -351,7 +351,7 @@ class TestOutOfStockOperations:
             substitution="Almond Milk",
             reported_by="Francisco",
         )
-        sqlite_store.add_out_of_stock(record)
+        _ = sqlite_store.add_out_of_stock(record)
 
         records = sqlite_store.load_out_of_stock()
         assert len(records) == 1
