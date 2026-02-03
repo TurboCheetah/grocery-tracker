@@ -259,6 +259,56 @@ class TestStatsSuggestCommand:
         assert len(output["data"]["suggestions"]) >= 1
 
 
+class TestStatsBulkCommand:
+    """Tests for grocery stats bulk command."""
+
+    def test_bulk_empty(self, cli_data_dir):
+        """Bulk command returns empty recommendations when no data."""
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "bulk"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert output["data"]["bulk_buying"]["recommendations"] == []
+
+    def test_bulk_with_data(self, cli_data_dir, data_store):
+        """Bulk command returns recommendations when savings exist."""
+        today = date.today()
+        receipt1 = Receipt(
+            store_name="Giant",
+            transaction_date=today,
+            line_items=[
+                LineItem(item_name="Soda", quantity=1, unit_price=2.00, total_price=2.00),
+            ],
+            subtotal=2.00,
+            total=2.00,
+        )
+        receipt2 = Receipt(
+            store_name="Giant",
+            transaction_date=today,
+            line_items=[
+                LineItem(item_name="Soda", quantity=12, unit_price=1.50, total_price=18.00),
+            ],
+            subtotal=18.00,
+            total=18.00,
+        )
+
+        rid1 = data_store.save_receipt(receipt1)
+        rid2 = data_store.save_receipt(receipt2)
+        data_store.update_price("Soda", "Giant", 2.00, today, receipt_id=rid1)
+        data_store.update_price("Soda", "Giant", 1.50, today, receipt_id=rid2)
+
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "bulk"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        recs = output["data"]["bulk_buying"]["recommendations"]
+        assert len(recs) >= 1
+        assert recs[0]["item_name"] == "Soda"
+
+
 class TestOutOfStockReportCommand:
     """Tests for grocery out-of-stock report command."""
 

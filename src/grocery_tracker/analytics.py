@@ -8,11 +8,13 @@ from datetime import date, timedelta
 from .data_store import DataStore
 from .models import (
     BudgetTracking,
+    BulkBuyingRecommendation,
     CategoryBudget,
     CategorySpending,
     FrequencyData,
     OutOfStockRecord,
     PriceComparison,
+    PriceHistory,
     SeasonalMonth,
     SeasonalPattern,
     SpendingSummary,
@@ -268,6 +270,223 @@ class Analytics:
         suggestions.sort(key=lambda s: priority_order.get(s.priority, 1))
 
         return suggestions
+
+    def bulk_buying_analysis(
+        self,
+        lookback_days: int = 90,
+        min_savings_pct: float = 5.0,
+        min_savings_abs: float = 0.05,
+        limit: int = 5,
+    ) -> list[BulkBuyingRecommendation]:
+        """Analyze bulk buying opportunities.
+
+        Uses price history plus receipt spending data to detect when higher-quantity
+        purchases consistently have lower unit prices, then estimates monthly savings.
+
+        Args:
+            lookback_days: Days of receipt history to estimate monthly usage
+            min_savings_pct: Minimum percent savings per unit to recommend
+            min_savings_abs: Minimum absolute savings per unit to recommend
+            limit: Maximum number of recommendations to return
+
+        Returns:
+            List of BulkBuyingRecommendation objects
+        """
+        receipts = self.data_store.list_receipts()
+        if not receipts:
+            return []
+
+        price_history = self.data_store.load_price_history()
+
+        purchases_by_item_store: dict[tuple[str, str], list[dict]] = defaultdict(list)
+        purchases_by_item: dict[str, list[dict]] = defaultdict(list)
+
+        for receipt in receipts:
+            for item in receipt.line_items:
+                if item.quantity <= 0:
+                    continue
+                entry = {
+                    "item_name": item.item_name,
+                    "store": receipt.store_name,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "total_price": item.total_price,
+                    "date": receipt.transaction_date,
+                }
+                purchases_by_item_store[
+                    (item.item_name, receipt.store_name)
+                ].append(entry)
+                purchases_by_item[item.item_name].append(entry)
+
+        monthly_usage: dict[str, float | None] = {}
+        for item_name, entries in purchases_by_item.items():
+            monthly_usage[item_name] = self._estimate_monthly_quantity(
+                item_name,
+                entries,
+                lookback_days,
+            )
+
+        recommendations: list[BulkBuyingRecommendation] = []
+
+        for (item_name, store), entries in purchases_by_item_store.items():
+            history_key = self._find_history_key(item_name, price_history)
+            if history_key is None:
+                continue
+            if store not in price_history.get(history_key, {}):
+                continue
+
+            quantity_groups: dict[float, list[dict]] = defaultdict(list)
+            for entry in entries:
+                qty = self._normalize_quantity(entry["quantity"])
+                quantity_groups[qty].append(entry)
+
+            if len(quantity_groups) < 2:
+                continue
+
+            quantities = sorted(quantity_groups.keys())
+            single_qty = quantities[0]
+            single_entries = quantity_groups[single_qty]
+            single_avg = self._average_unit_price(single_entries)
+
+            bulk_candidates = {
+                qty: self._average_unit_price(quantity_groups[qty])
+                for qty in quantities[1:]
+            }
+            bulk_qty = min(bulk_candidates, key=bulk_candidates.get)
+            bulk_avg = bulk_candidates[bulk_qty]
+
+            if single_avg is None or bulk_avg is None:
+                continue
+
+            if bulk_avg >= single_avg:
+                continue
+
+            unit_savings = single_avg - bulk_avg
+            unit_savings_pct = (
+                (unit_savings / single_avg * 100) if single_avg > 0 else 0.0
+            )
+
+            if unit_savings < min_savings_abs and unit_savings_pct < min_savings_pct:
+                continue
+
+            monthly_qty = monthly_usage.get(item_name)
+            if monthly_qty is None or monthly_qty <= 0:
+                continue
+
+            single_count = len(single_entries)
+            bulk_count = len(quantity_groups[bulk_qty])
+            confidence = self._bulk_confidence(single_count, bulk_count)
+
+            recommendations.append(
+                BulkBuyingRecommendation(
+                    item_name=item_name,
+                    store=store,
+                    single_quantity=single_qty,
+                    single_unit_price=round(single_avg, 2),
+                    bulk_quantity=bulk_qty,
+                    bulk_unit_price=round(bulk_avg, 2),
+                    unit_savings=round(unit_savings, 2),
+                    unit_savings_percent=round(unit_savings_pct, 1),
+                    estimated_monthly_quantity=round(monthly_qty, 2),
+                    estimated_monthly_savings=round(unit_savings * monthly_qty, 2),
+                    single_purchase_count=single_count,
+                    bulk_purchase_count=bulk_count,
+                    confidence=confidence,
+                )
+            )
+
+        best_by_item: dict[str, BulkBuyingRecommendation] = {}
+        for rec in recommendations:
+            current = best_by_item.get(rec.item_name)
+            if (
+                current is None
+                or rec.estimated_monthly_savings > current.estimated_monthly_savings
+            ):
+                best_by_item[rec.item_name] = rec
+
+        sorted_recs = sorted(
+            best_by_item.values(),
+            key=lambda r: r.estimated_monthly_savings,
+            reverse=True,
+        )
+
+        if limit > 0:
+            return sorted_recs[:limit]
+
+        return sorted_recs
+
+    def _find_history_key(
+        self,
+        item_name: str,
+        history: dict[str, dict[str, PriceHistory]],
+    ) -> str | None:
+        """Match item name to price history key (case-insensitive)."""
+        if item_name in history:
+            return item_name
+        for key in history:
+            if key.lower() == item_name.lower():
+                return key
+        return None
+
+    def _normalize_quantity(self, quantity: float) -> float:
+        """Normalize quantities for grouping (convert near-integers to ints)."""
+        if abs(quantity - round(quantity)) < 0.0001:
+            return float(int(round(quantity)))
+        return round(quantity, 2)
+
+    def _average_unit_price(self, entries: list[dict]) -> float | None:
+        """Average unit price for a group of purchases."""
+        if not entries:
+            return None
+        return sum(entry["unit_price"] for entry in entries) / len(entries)
+
+    def _bulk_confidence(self, single_count: int, bulk_count: int) -> str:
+        """Confidence based on sample size for single and bulk purchases."""
+        min_count = min(single_count, bulk_count)
+        total = single_count + bulk_count
+        if min_count >= 3 and total >= 6:
+            return "high"
+        if min_count >= 2:
+            return "medium"
+        return "low"
+
+    def _estimate_monthly_quantity(
+        self,
+        item_name: str,
+        entries: list[dict],
+        lookback_days: int,
+    ) -> float | None:
+        """Estimate monthly quantity for an item using frequency + receipt history."""
+        freq = self.data_store.get_frequency(item_name)
+        if freq and freq.average_days_between_purchases:
+            avg_days = freq.average_days_between_purchases
+            if avg_days and avg_days > 0:
+                avg_qty = (
+                    sum(p.quantity for p in freq.purchase_history)
+                    / len(freq.purchase_history)
+                )
+                return (30 / avg_days) * avg_qty
+
+        if not entries:
+            return None
+
+        today = date.today()
+        cutoff = today - timedelta(days=lookback_days)
+        recent = [entry for entry in entries if entry["date"] >= cutoff]
+        if not recent:
+            recent = entries
+
+        total_qty = sum(entry["quantity"] for entry in recent)
+        if len(recent) < 2:
+            return total_qty
+
+        dates = [entry["date"] for entry in recent]
+        span_days = (max(dates) - min(dates)).days
+        if span_days <= 0:
+            return total_qty
+
+        daily_rate = total_qty / span_days
+        return daily_rate * 30
 
     def record_out_of_stock(
         self,

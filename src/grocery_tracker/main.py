@@ -534,6 +534,54 @@ def stats_compare(
         raise typer.Exit(code=1)
 
 
+@stats_app.command("bulk")
+def stats_bulk(
+    lookback_days: Annotated[
+        int, typer.Option("--days", "-d", help="Days of history to estimate usage")
+    ] = 90,
+    limit: Annotated[
+        int, typer.Option("--limit", "-l", help="Max recommendations to return")
+    ] = 5,
+    min_savings_pct: Annotated[
+        float,
+        typer.Option("--min-savings-pct", help="Minimum percent savings per unit"),
+    ] = 5.0,
+    min_savings_abs: Annotated[
+        float,
+        typer.Option("--min-savings", help="Minimum absolute savings per unit"),
+    ] = 0.05,
+) -> None:
+    """Analyze bulk buying opportunities."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        recommendations = analytics.bulk_buying_analysis(
+            lookback_days=lookback_days,
+            min_savings_pct=min_savings_pct,
+            min_savings_abs=min_savings_abs,
+            limit=limit,
+        )
+
+        output_data = {
+            "success": True,
+            "data": {
+                "bulk_buying": {
+                    "lookback_days": lookback_days,
+                    "recommendations": [r.model_dump() for r in recommendations],
+                },
+            },
+        }
+
+        message = (
+            f"Found {len(recommendations)} bulk buying opportunities"
+            if recommendations
+            else "No bulk buying opportunities"
+        )
+        formatter.output(output_data, message)
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
 @stats_app.command("suggest")
 def stats_suggest() -> None:
     """Get smart shopping suggestions."""
