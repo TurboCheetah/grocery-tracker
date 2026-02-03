@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 
 from grocery_tracker.inventory_manager import InventoryManager
-from grocery_tracker.models import InventoryItem, InventoryLocation
+from grocery_tracker.models import InventoryLocation
 
 
 @pytest.fixture

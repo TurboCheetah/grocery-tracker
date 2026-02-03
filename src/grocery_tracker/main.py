@@ -460,9 +460,7 @@ def stats_frequency(
 
 @stats_app.command("seasonal")
 def stats_seasonal(
-    item: Annotated[
-        str | None, typer.Argument(help="Item name (omit when using --all)")
-    ] = None,
+    item: Annotated[str | None, typer.Argument(help="Item name (omit when using --all)")] = None,
     all_items: Annotated[
         bool, typer.Option("--all", help="Show seasonal patterns for all items")
     ] = False,
@@ -570,9 +568,7 @@ def oos_report(
     substitution: Annotated[
         str | None, typer.Option("--sub", "-s", help="What was bought instead")
     ] = None,
-    reported_by: Annotated[
-        str | None, typer.Option("--by", help="Who is reporting")
-    ] = None,
+    reported_by: Annotated[str | None, typer.Option("--by", help="Who is reporting")] = None,
 ) -> None:
     """Report an item as out of stock at a store."""
     try:
@@ -599,12 +595,8 @@ def oos_report(
 
 @oos_app.command("list")
 def oos_list(
-    item: Annotated[
-        str | None, typer.Option("--item", "-i", help="Filter by item name")
-    ] = None,
-    store: Annotated[
-        str | None, typer.Option("--store", "-s", help="Filter by store")
-    ] = None,
+    item: Annotated[str | None, typer.Option("--item", "-i", help="Filter by item name")] = None,
+    store: Annotated[str | None, typer.Option("--store", "-s", help="Filter by store")] = None,
 ) -> None:
     """List out-of-stock records."""
     try:
@@ -976,12 +968,8 @@ def prefs_set(
     dietary: Annotated[
         list[str] | None, typer.Option("--dietary", help="Dietary restriction")
     ] = None,
-    allergen: Annotated[
-        list[str] | None, typer.Option("--allergen", help="Allergen")
-    ] = None,
-    favorite: Annotated[
-        list[str] | None, typer.Option("--favorite", help="Favorite item")
-    ] = None,
+    allergen: Annotated[list[str] | None, typer.Option("--allergen", help="Allergen")] = None,
+    favorite: Annotated[list[str] | None, typer.Option("--favorite", help="Favorite item")] = None,
 ) -> None:
     """Set user preferences."""
     try:

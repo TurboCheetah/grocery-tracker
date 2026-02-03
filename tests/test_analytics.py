@@ -1,14 +1,11 @@
 """Tests for analytics module."""
 
 from datetime import date, timedelta
-from unittest.mock import MagicMock
 
 import pytest
 
 from grocery_tracker.analytics import Analytics
-from grocery_tracker.data_store import DataStore
 from grocery_tracker.models import (
-    CategorySpending,
     FrequencyData,
     LineItem,
     OutOfStockRecord,
@@ -16,7 +13,6 @@ from grocery_tracker.models import (
     PricePoint,
     PurchaseRecord,
     Receipt,
-    Suggestion,
 )
 
 
@@ -284,9 +280,7 @@ class TestSuggestions:
 
         # Create OOS record (low priority)
         for _ in range(3):
-            data_store.add_out_of_stock(
-                OutOfStockRecord(item_name="Oat Milk", store="Giant")
-            )
+            data_store.add_out_of_stock(OutOfStockRecord(item_name="Oat Milk", store="Giant"))
 
         suggestions = analytics.get_suggestions()
         if len(suggestions) >= 2:
@@ -380,9 +374,7 @@ class TestSeasonalPatterns:
 
     def test_year_round_pattern(self, analytics, data_store):
         """Flags year-round purchasing when most months have activity."""
-        purchase_history = [
-            PurchaseRecord(date=date(2025, month, 1)) for month in range(1, 13)
-        ]
+        purchase_history = [PurchaseRecord(date=date(2025, month, 1)) for month in range(1, 13)]
         freq = FrequencyData(item_name="Milk", purchase_history=purchase_history)
         data_store.save_frequency_data({"Milk": freq})
 
@@ -408,9 +400,7 @@ class TestSeasonalPatterns:
                 PurchaseRecord(date=date(2025, 5, 15)),
             ],
         )
-        data_store.save_frequency_data(
-            {"Apples": freq_apples, "Strawberries": freq_strawberries}
-        )
+        data_store.save_frequency_data({"Apples": freq_apples, "Strawberries": freq_strawberries})
 
         patterns = analytics.get_seasonal_patterns()
         assert len(patterns) == 2
