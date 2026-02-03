@@ -586,15 +586,14 @@ class Analytics:
         if savings_override is not None:
             total_savings = savings_override
         else:
+            effective_regular = regular_price if regular_price is not None else deal.regular_price
+            effective_paid = paid_price if paid_price is not None else deal.deal_price
+
             savings_per_unit = None
-            if regular_price is not None and paid_price is not None:
-                savings_per_unit = regular_price - paid_price
+            if effective_regular is not None and effective_paid is not None:
+                savings_per_unit = effective_regular - effective_paid
             else:
                 savings_per_unit = deal.savings_per_unit
-                if regular_price is None:
-                    regular_price = deal.regular_price
-                if paid_price is None:
-                    paid_price = deal.deal_price
 
             if savings_per_unit is None:
                 raise ValueError(
@@ -602,6 +601,8 @@ class Analytics:
                 )
 
             total_savings = savings_per_unit * quantity
+            regular_price = effective_regular
+            paid_price = effective_paid
 
         total_savings = round(max(total_savings, 0.0), 2)
 

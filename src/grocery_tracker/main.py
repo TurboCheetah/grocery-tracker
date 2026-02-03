@@ -996,7 +996,12 @@ def deals_list(
                     filtered.append(deal)
                 elif deal.is_active and status_filter == "active":
                     filtered.append(deal)
-                elif not deal.is_active and not deal.is_expired and status_filter == "upcoming":
+                elif (
+                    not deal.redeemed
+                    and not deal.is_active
+                    and not deal.is_expired
+                    and status_filter == "upcoming"
+                ):
                     filtered.append(deal)
             deals = filtered
 

@@ -1471,7 +1471,12 @@ class SQLiteStore:
     def save_deals(self, deals: list[Deal]) -> None:
         """Save all deals (overwrite existing)."""
         with self._get_connection() as conn:
-            conn.execute("DELETE FROM deals")
+            existing_ids = {
+                row["id"]
+                for row in conn.execute("SELECT id FROM deals").fetchall()
+            }
+            incoming_ids = {str(deal.id) for deal in deals}
+
             for deal in deals:
                 conn.execute(
                     """
@@ -1480,6 +1485,22 @@ class SQLiteStore:
                      discount_amount, discount_percent, start_date, end_date,
                      coupon_code, source, notes, created_at, redeemed, redeemed_date)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        item_name = excluded.item_name,
+                        store = excluded.store,
+                        deal_type = excluded.deal_type,
+                        regular_price = excluded.regular_price,
+                        deal_price = excluded.deal_price,
+                        discount_amount = excluded.discount_amount,
+                        discount_percent = excluded.discount_percent,
+                        start_date = excluded.start_date,
+                        end_date = excluded.end_date,
+                        coupon_code = excluded.coupon_code,
+                        source = excluded.source,
+                        notes = excluded.notes,
+                        created_at = excluded.created_at,
+                        redeemed = excluded.redeemed,
+                        redeemed_date = excluded.redeemed_date
                     """,
                     (
                         str(deal.id),
@@ -1499,6 +1520,18 @@ class SQLiteStore:
                         1 if deal.redeemed else 0,
                         deal.redeemed_date.isoformat() if deal.redeemed_date else None,
                     ),
+                )
+
+            removed_ids = existing_ids - incoming_ids
+            if removed_ids:
+                placeholders = ",".join("?" * len(removed_ids))
+                conn.execute(
+                    f"UPDATE savings_records SET deal_id = NULL WHERE deal_id IN ({placeholders})",
+                    list(removed_ids),
+                )
+                conn.execute(
+                    f"DELETE FROM deals WHERE id IN ({placeholders})",
+                    list(removed_ids),
                 )
 
     def add_deal(self, deal: Deal) -> UUID:
