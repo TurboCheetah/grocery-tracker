@@ -25,10 +25,10 @@ typical_categories = ["Produce", "Dairy", "Meat", "Bakery"]
 name = "Trader Joe's"
 typical_categories = ["Produce", "Frozen", "Snacks"]
 
-[users.alice]
+[users.francisco]
 dietary_restrictions = []
 favorite_stores = ["Giant", "Trader Joe's"]
 
-[users.bob]
+[users.loki]
 dietary_restrictions = ["vegetarian"]
 favorite_stores = ["Whole Foods", "Trader Joe's"]

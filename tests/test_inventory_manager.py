@@ -36,13 +36,13 @@ class TestAddItem:
             location=InventoryLocation.FRIDGE,
             expiration_date=exp,
             low_stock_threshold=2.0,
-            added_by="Alice",
+            added_by="Francisco",
         )
         assert item.item_name == "Yogurt"
         assert item.location == InventoryLocation.FRIDGE
         assert item.expiration_date == exp
         assert item.low_stock_threshold == 2.0
-        assert item.added_by == "Alice"
+        assert item.added_by == "Francisco"
 
     def test_add_persists(self, inv_manager, data_store):
         """Added items persist to data store."""

@@ -204,18 +204,18 @@ Present: Budget, spent, remaining, percentage, on-track status.
 Store brand preferences, dietary restrictions, and allergens:
 
 ```bash
-grocery preferences view "Alice" --json
-grocery preferences set "Alice" --brand "milk:Organic Valley" --dietary vegetarian --json
+grocery preferences view "Francisco" --json
+grocery preferences set "Francisco" --brand "milk:Organic Valley" --dietary vegetarian --json
 ```
 
-Incorporate in responses: "Note: Alice prefers Organic Valley milk"
+Incorporate in responses: "Note: Francisco prefers Organic Valley milk"
 
 ## Multi-User Context
 
-Alice and Bob share the list:
-- Different brand preferences (Alice: Organic Valley, Bob: Horizon)
-- Dietary restrictions (Bob is vegetarian)
-- Shopping patterns (Alice: Tue/Sat, Bob: Wed/Sun)
+Francisco and Loki share the list:
+- Different brand preferences (Francisco: Organic Valley, Loki: Horizon)
+- Dietary restrictions (Loki is vegetarian)
+- Shopping patterns (Francisco: Tue/Sat, Loki: Wed/Sun)
 
 ## Output Best Practices
 

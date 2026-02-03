@@ -284,23 +284,23 @@ class TestMultiUserWorkflow:
 
     def test_items_added_by_different_users(self, list_manager):
         """Test tracking which user added each item."""
-        # Alice adds items
-        list_manager.add_item(name="Milk", added_by="Alice")
-        list_manager.add_item(name="Coffee", added_by="Alice")
+        # Francisco adds items
+        list_manager.add_item(name="Milk", added_by="Francisco")
+        list_manager.add_item(name="Coffee", added_by="Francisco")
 
-        # Bob adds items
-        list_manager.add_item(name="Cat Food", added_by="Bob")
-        list_manager.add_item(name="Tofu", added_by="Bob")
+        # Loki adds items
+        list_manager.add_item(name="Cat Food", added_by="Loki")
+        list_manager.add_item(name="Tofu", added_by="Loki")
 
         # Get full list
         result = list_manager.get_list()
         items = result["data"]["list"]["items"]
 
-        alice_items = [i for i in items if i["added_by"] == "Alice"]
-        bob_items = [i for i in items if i["added_by"] == "Bob"]
+        francisco_items = [i for i in items if i["added_by"] == "Francisco"]
+        loki_items = [i for i in items if i["added_by"] == "Loki"]
 
-        assert len(alice_items) == 2
-        assert len(bob_items) == 2
+        assert len(francisco_items) == 2
+        assert len(loki_items) == 2
 
 
 class TestDataPersistenceWorkflow:

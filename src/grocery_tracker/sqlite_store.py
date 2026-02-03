@@ -14,6 +14,8 @@ from uuid import UUID
 from .models import (
     BudgetTracking,
     CategoryBudget,
+    Deal,
+    DealType,
     FrequencyData,
     GroceryItem,
     GroceryList,
@@ -27,6 +29,8 @@ from .models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    SavingsRecord,
+    SavingsType,
     UserPreferences,
     WasteReason,
     WasteRecord,
@@ -283,6 +287,47 @@ class SQLiteStore:
                     favorite_items TEXT NOT NULL DEFAULT '[]',
                     shopping_patterns TEXT NOT NULL DEFAULT '{}'
                 );
+
+                -- Deals (coupons/sales)
+                CREATE TABLE IF NOT EXISTS deals (
+                    id TEXT PRIMARY KEY,
+                    item_name TEXT NOT NULL,
+                    store TEXT NOT NULL,
+                    deal_type TEXT NOT NULL,
+                    regular_price REAL,
+                    deal_price REAL,
+                    discount_amount REAL,
+                    discount_percent REAL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    coupon_code TEXT,
+                    source TEXT,
+                    notes TEXT,
+                    created_at TEXT NOT NULL,
+                    redeemed INTEGER NOT NULL DEFAULT 0,
+                    redeemed_date TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_deals_store_type
+                    ON deals(store, deal_type);
+
+                -- Savings records
+                CREATE TABLE IF NOT EXISTS savings_records (
+                    id TEXT PRIMARY KEY,
+                    item_name TEXT NOT NULL,
+                    store TEXT,
+                    savings_amount REAL NOT NULL,
+                    regular_price REAL,
+                    paid_price REAL,
+                    quantity REAL NOT NULL DEFAULT 1.0,
+                    savings_type TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    deal_id TEXT REFERENCES deals(id),
+                    notes TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_savings_date
+                    ON savings_records(date);
 
                 -- Initialize list metadata if not exists
                 INSERT OR IGNORE INTO list_metadata (id, version, last_updated)
@@ -1382,3 +1427,257 @@ class SQLiteStore:
                     json.dumps(prefs.shopping_patterns),
                 ),
             )
+
+    # --- Deals (Coupons/Sales) Operations ---
+
+    def load_deals(self) -> list[Deal]:
+        """Load all deals."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM deals ORDER BY created_at DESC"
+            ).fetchall()
+
+            deals: list[Deal] = []
+            for row in rows:
+                deals.append(
+                    Deal(
+                        id=UUID(row["id"]),
+                        item_name=row["item_name"],
+                        store=row["store"],
+                        deal_type=DealType(row["deal_type"]),
+                        regular_price=row["regular_price"],
+                        deal_price=row["deal_price"],
+                        discount_amount=row["discount_amount"],
+                        discount_percent=row["discount_percent"],
+                        start_date=date.fromisoformat(row["start_date"])
+                        if row["start_date"]
+                        else None,
+                        end_date=date.fromisoformat(row["end_date"])
+                        if row["end_date"]
+                        else None,
+                        coupon_code=row["coupon_code"],
+                        source=row["source"],
+                        notes=row["notes"],
+                        created_at=datetime.fromisoformat(row["created_at"]),
+                        redeemed=bool(row["redeemed"]),
+                        redeemed_date=date.fromisoformat(row["redeemed_date"])
+                        if row["redeemed_date"]
+                        else None,
+                    )
+                )
+
+            return deals
+
+    def save_deals(self, deals: list[Deal]) -> None:
+        """Save all deals (overwrite existing)."""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM deals")
+            for deal in deals:
+                conn.execute(
+                    """
+                    INSERT INTO deals
+                    (id, item_name, store, deal_type, regular_price, deal_price,
+                     discount_amount, discount_percent, start_date, end_date,
+                     coupon_code, source, notes, created_at, redeemed, redeemed_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(deal.id),
+                        deal.item_name,
+                        deal.store,
+                        deal.deal_type.value,
+                        deal.regular_price,
+                        deal.deal_price,
+                        deal.discount_amount,
+                        deal.discount_percent,
+                        deal.start_date.isoformat() if deal.start_date else None,
+                        deal.end_date.isoformat() if deal.end_date else None,
+                        deal.coupon_code,
+                        deal.source,
+                        deal.notes,
+                        deal.created_at.isoformat(),
+                        1 if deal.redeemed else 0,
+                        deal.redeemed_date.isoformat() if deal.redeemed_date else None,
+                    ),
+                )
+
+    def add_deal(self, deal: Deal) -> UUID:
+        """Add a deal."""
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO deals
+                (id, item_name, store, deal_type, regular_price, deal_price,
+                 discount_amount, discount_percent, start_date, end_date,
+                 coupon_code, source, notes, created_at, redeemed, redeemed_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(deal.id),
+                    deal.item_name,
+                    deal.store,
+                    deal.deal_type.value,
+                    deal.regular_price,
+                    deal.deal_price,
+                    deal.discount_amount,
+                    deal.discount_percent,
+                    deal.start_date.isoformat() if deal.start_date else None,
+                    deal.end_date.isoformat() if deal.end_date else None,
+                    deal.coupon_code,
+                    deal.source,
+                    deal.notes,
+                    deal.created_at.isoformat(),
+                    1 if deal.redeemed else 0,
+                    deal.redeemed_date.isoformat() if deal.redeemed_date else None,
+                ),
+            )
+        return deal.id
+
+    def get_deal(self, deal_id: str | UUID) -> Deal | None:
+        """Get a deal by ID."""
+        if isinstance(deal_id, UUID):
+            deal_id = str(deal_id)
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM deals WHERE id = ?",
+                (deal_id,),
+            ).fetchone()
+            if not row:
+                return None
+            return Deal(
+                id=UUID(row["id"]),
+                item_name=row["item_name"],
+                store=row["store"],
+                deal_type=DealType(row["deal_type"]),
+                regular_price=row["regular_price"],
+                deal_price=row["deal_price"],
+                discount_amount=row["discount_amount"],
+                discount_percent=row["discount_percent"],
+                start_date=date.fromisoformat(row["start_date"])
+                if row["start_date"]
+                else None,
+                end_date=date.fromisoformat(row["end_date"])
+                if row["end_date"]
+                else None,
+                coupon_code=row["coupon_code"],
+                source=row["source"],
+                notes=row["notes"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                redeemed=bool(row["redeemed"]),
+                redeemed_date=date.fromisoformat(row["redeemed_date"])
+                if row["redeemed_date"]
+                else None,
+            )
+
+    def update_deal(self, deal: Deal) -> None:
+        """Update a deal (upsert)."""
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO deals
+                (id, item_name, store, deal_type, regular_price, deal_price,
+                 discount_amount, discount_percent, start_date, end_date,
+                 coupon_code, source, notes, created_at, redeemed, redeemed_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(deal.id),
+                    deal.item_name,
+                    deal.store,
+                    deal.deal_type.value,
+                    deal.regular_price,
+                    deal.deal_price,
+                    deal.discount_amount,
+                    deal.discount_percent,
+                    deal.start_date.isoformat() if deal.start_date else None,
+                    deal.end_date.isoformat() if deal.end_date else None,
+                    deal.coupon_code,
+                    deal.source,
+                    deal.notes,
+                    deal.created_at.isoformat(),
+                    1 if deal.redeemed else 0,
+                    deal.redeemed_date.isoformat() if deal.redeemed_date else None,
+                ),
+            )
+
+    # --- Savings Records Operations ---
+
+    def load_savings(self) -> list[SavingsRecord]:
+        """Load savings records."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM savings_records ORDER BY date DESC"
+            ).fetchall()
+
+            records: list[SavingsRecord] = []
+            for row in rows:
+                records.append(
+                    SavingsRecord(
+                        id=UUID(row["id"]),
+                        item_name=row["item_name"],
+                        store=row["store"],
+                        savings_amount=row["savings_amount"],
+                        regular_price=row["regular_price"],
+                        paid_price=row["paid_price"],
+                        quantity=row["quantity"],
+                        savings_type=SavingsType(row["savings_type"]),
+                        date=date.fromisoformat(row["date"]),
+                        deal_id=UUID(row["deal_id"]) if row["deal_id"] else None,
+                        notes=row["notes"],
+                    )
+                )
+
+            return records
+
+    def save_savings(self, records: list[SavingsRecord]) -> None:
+        """Save savings records (overwrite existing)."""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM savings_records")
+            for record in records:
+                conn.execute(
+                    """
+                    INSERT INTO savings_records
+                    (id, item_name, store, savings_amount, regular_price, paid_price,
+                     quantity, savings_type, date, deal_id, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(record.id),
+                        record.item_name,
+                        record.store,
+                        record.savings_amount,
+                        record.regular_price,
+                        record.paid_price,
+                        record.quantity,
+                        record.savings_type.value,
+                        record.date.isoformat(),
+                        str(record.deal_id) if record.deal_id else None,
+                        record.notes,
+                    ),
+                )
+
+    def add_savings(self, record: SavingsRecord) -> UUID:
+        """Add a savings record."""
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO savings_records
+                (id, item_name, store, savings_amount, regular_price, paid_price,
+                 quantity, savings_type, date, deal_id, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(record.id),
+                    record.item_name,
+                    record.store,
+                    record.savings_amount,
+                    record.regular_price,
+                    record.paid_price,
+                    record.quantity,
+                    record.savings_type.value,
+                    record.date.isoformat(),
+                    str(record.deal_id) if record.deal_id else None,
+                    record.notes,
+                ),
+            )
+        return record.id

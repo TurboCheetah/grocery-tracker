@@ -214,6 +214,112 @@ class TestRenderBudgetStatus:
         assert "Produce" in output
 
 
+class TestRenderDeals:
+    """Tests for deals rendering."""
+
+    def test_render_empty(self):
+        """Renders empty deals."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {"data": {"deals": [], "count": 0}}
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "No deals" in output
+
+    def test_render_deals(self):
+        """Renders deals table."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "deals": [
+                    {
+                        "item_name": "Eggs",
+                        "store": "Giant",
+                        "deal_type": "sale",
+                        "regular_price": 3.99,
+                        "deal_price": 2.99,
+                        "status": "active",
+                        "start_date": "2026-01-25",
+                        "end_date": "2026-01-31",
+                    }
+                ],
+                "count": 1,
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Deals" in output
+        assert "Eggs" in output
+        assert "Giant" in output
+
+
+class TestRenderSavings:
+    """Tests for savings rendering."""
+
+    def test_render_empty(self):
+        """Renders empty savings list."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {"data": {"savings": [], "count": 0}}
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "No savings" in output
+
+    def test_render_records(self):
+        """Renders savings records."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "savings": [
+                    {
+                        "item_name": "Milk",
+                        "store": "Giant",
+                        "savings_type": "sale",
+                        "savings_amount": 1.50,
+                        "date": "2026-01-27",
+                    }
+                ],
+                "count": 1,
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Savings Records" in output
+        assert "Milk" in output
+        assert "1.50" in output
+
+
+class TestRenderSavingsSummary:
+    """Tests for savings summary rendering."""
+
+    def test_render_summary(self):
+        """Renders savings summary."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "savings_summary": {
+                    "period": "monthly",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-01-27",
+                    "total_savings": 12.0,
+                    "savings_count": 3,
+                    "average_savings": 4.0,
+                    "by_type": {"sale": 8.0, "coupon": 4.0},
+                    "by_store": {"Giant": 12.0},
+                    "top_items": [{"item": "Eggs", "total": 5.0}],
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Savings Summary" in output
+        assert "12.00" in output
+        assert "Giant" in output
+
+
 class TestRenderPreferences:
     """Tests for preferences rendering."""
 
@@ -224,7 +330,7 @@ class TestRenderPreferences:
         data = {
             "data": {
                 "preferences": {
-                    "user": "Alice",
+                    "user": "Francisco",
                     "brand_preferences": {"milk": "Organic Valley"},
                     "dietary_restrictions": ["lactose_intolerant"],
                     "allergens": ["peanuts"],
@@ -235,7 +341,7 @@ class TestRenderPreferences:
         }
         fmt.output(data)
         output = fmt.console.file.getvalue()
-        assert "Alice" in output
+        assert "Francisco" in output
         assert "Organic Valley" in output
         assert "peanuts" in output
         assert "mango" in output

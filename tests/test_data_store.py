@@ -8,10 +8,14 @@ import pytest
 
 from grocery_tracker.data_store import DataStore, JSONEncoder
 from grocery_tracker.models import (
+    Deal,
+    DealType,
     GroceryItem,
     GroceryList,
     LineItem,
     Receipt,
+    SavingsRecord,
+    SavingsType,
 )
 
 
@@ -264,6 +268,57 @@ class TestPriceHistoryPersistence:
         point = history["Milk"]["Giant"].price_points[0]
         assert point.receipt_id == receipt_id
         assert point.sale is True
+
+
+class TestDealsPersistence:
+    """Tests for deals persistence."""
+
+    def test_add_and_load_deal(self, data_store):
+        """Deals persist and load correctly."""
+        deal = Deal(
+            item_name="Eggs",
+            store="Giant",
+            deal_type=DealType.SALE,
+            regular_price=3.99,
+            deal_price=2.99,
+        )
+        data_store.add_deal(deal)
+
+        deals = data_store.load_deals()
+        assert len(deals) == 1
+        assert deals[0].item_name == "Eggs"
+        assert deals[0].deal_type == DealType.SALE
+
+    def test_update_deal(self, data_store):
+        """Deals can be updated."""
+        deal = Deal(item_name="Milk", store="Giant")
+        data_store.add_deal(deal)
+
+        deal.redeemed = True
+        data_store.update_deal(deal)
+
+        loaded = data_store.get_deal(deal.id)
+        assert loaded is not None
+        assert loaded.redeemed is True
+
+
+class TestSavingsPersistence:
+    """Tests for savings persistence."""
+
+    def test_add_and_load_savings(self, data_store):
+        """Savings records persist and load correctly."""
+        record = SavingsRecord(
+            item_name="Milk",
+            store="Giant",
+            savings_amount=1.50,
+            savings_type=SavingsType.SALE,
+        )
+        data_store.add_savings(record)
+
+        records = data_store.load_savings()
+        assert len(records) == 1
+        assert records[0].item_name == "Milk"
+        assert records[0].savings_amount == 1.50
 
 
 class TestJSONDecoder:

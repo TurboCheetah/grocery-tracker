@@ -29,7 +29,7 @@ alert_threshold = 0.85
 name = "Giant Food"
 typical_categories = ["Produce", "Dairy"]
 
-[users.alice]
+[users.francisco]
 dietary_restrictions = ["vegetarian"]
 favorite_stores = ["Giant", "Trader Joe's"]
 """)
@@ -72,8 +72,8 @@ class TestConfigManager:
         """Load users configuration."""
         manager = ConfigManager(config_path=config_file)
 
-        assert "alice" in manager.users
-        assert "vegetarian" in manager.users["alice"]["dietary_restrictions"]
+        assert "francisco" in manager.users
+        assert "vegetarian" in manager.users["francisco"]["dietary_restrictions"]
 
     def test_missing_config_uses_defaults(self, tmp_path):
         """Missing config file uses default values."""

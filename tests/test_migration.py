@@ -88,7 +88,7 @@ def populated_json_store(json_store):
 
     # Add user preferences
     json_store.save_user_preferences(UserPreferences(
-        user="Alice",
+        user="Francisco",
         brand_preferences={"milk": "Organic Valley"},
     ))
 

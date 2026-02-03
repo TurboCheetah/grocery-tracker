@@ -31,7 +31,7 @@ grocery add "bananas" \
   --brand Dole \
   --price 0.49 \
   --priority high \
-  --by Alice \
+  --by Francisco \
   --notes "Get the ripe ones" \
   --json
 ```
@@ -65,7 +65,7 @@ grocery add "bananas" \
       "brand_preference": "Dole",
       "estimated_price": 0.49,
       "priority": "high",
-      "added_by": "Alice",
+      "added_by": "Francisco",
       "added_at": "2026-01-26T10:30:00Z",
       "notes": "Get the ripe ones",
       "status": "to_buy"
@@ -111,7 +111,7 @@ grocery list --store Giant --by-store --json
           "brand_preference": "Dole",
           "estimated_price": 0.49,
           "priority": "high",
-          "added_by": "Alice",
+          "added_by": "Francisco",
           "notes": "Get ripe ones",
           "status": "to_buy"
         }
@@ -390,7 +390,7 @@ grocery inventory add "milk" \
   --location fridge \
   --expires 2026-01-28 \
   --threshold 1 \
-  --by Alice \
+  --by Francisco \
   --json
 ```
 
@@ -459,7 +459,7 @@ grocery waste log "lettuce" \
   --unit head \
   --reason spoiled \
   --cost 3.99 \
-  --by Alice \
+  --by Francisco \
   --json
 ```
 
@@ -549,7 +549,7 @@ grocery budget status --month 2026-01 --json
 Report item as out of stock.
 
 ```bash
-grocery out-of-stock report "oat milk" "Trader Joe's" --sub "almond milk" --by Alice --json
+grocery out-of-stock report "oat milk" "Trader Joe's" --sub "almond milk" --by Francisco --json
 ```
 
 **Options:**
@@ -575,7 +575,7 @@ grocery out-of-stock list --item "oat milk" --store "Trader Joe's" --json
 View user preferences.
 
 ```bash
-grocery preferences view "Alice" --json
+grocery preferences view "Francisco" --json
 ```
 
 **Response:**
@@ -584,7 +584,7 @@ grocery preferences view "Alice" --json
   "success": true,
   "data": {
     "preferences": {
-      "user": "Alice",
+      "user": "Francisco",
       "brand_preferences": {"milk": "Organic Valley"},
       "dietary_restrictions": ["vegetarian"],
       "allergens": ["peanuts"],
@@ -599,7 +599,7 @@ grocery preferences view "Alice" --json
 Set user preferences.
 
 ```bash
-grocery preferences set "Alice" \
+grocery preferences set "Francisco" \
   --brand "milk:Organic Valley" \
   --dietary vegetarian \
   --allergen peanuts \

@@ -12,7 +12,7 @@ from .config import ConfigManager
 from .data_store import BackendType, DataStore, create_data_store
 from .inventory_manager import InventoryManager
 from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
-from .models import InventoryLocation, ItemStatus, Priority, WasteReason
+from .models import DealType, InventoryLocation, ItemStatus, Priority, SavingsType, WasteReason
 from .output_formatter import OutputFormatter
 from .receipt_processor import ReceiptProcessor
 
@@ -881,6 +881,328 @@ def budget_status(
             "data": {"budget_status": budget.model_dump()},
         }
         formatter.output(output_data, f"Budget status for {budget.month}")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+# --- Phase 3: Deals (Coupons/Sales) subcommand group ---
+deals_app = typer.Typer(help="Coupon and sale tracking")
+app.add_typer(deals_app, name="deals")
+
+
+@deals_app.command("add")
+def deals_add(
+    item: Annotated[str, typer.Argument(help="Item name")],
+    store: Annotated[str, typer.Option("--store", "-s", help="Store name")],
+    deal_type: Annotated[
+        DealType, typer.Option("--type", "-t", help="Deal type: coupon or sale")
+    ] = DealType.SALE,
+    regular_price: Annotated[
+        float | None, typer.Option("--regular-price", help="Regular price per unit")
+    ] = None,
+    deal_price: Annotated[
+        float | None, typer.Option("--deal-price", help="Deal price per unit")
+    ] = None,
+    discount_amount: Annotated[
+        float | None, typer.Option("--discount", help="Discount amount per unit")
+    ] = None,
+    discount_percent: Annotated[
+        float | None, typer.Option("--discount-percent", help="Discount percentage")
+    ] = None,
+    start_date: Annotated[
+        str | None, typer.Option("--start", help="Start date (YYYY-MM-DD)")
+    ] = None,
+    end_date: Annotated[
+        str | None, typer.Option("--end", help="End date (YYYY-MM-DD)")
+    ] = None,
+    code: Annotated[
+        str | None, typer.Option("--code", help="Coupon code")
+    ] = None,
+    source: Annotated[
+        str | None, typer.Option("--source", help="Flyer/app source")
+    ] = None,
+    notes: Annotated[
+        str | None, typer.Option("--notes", "-n", help="Notes")
+    ] = None,
+) -> None:
+    """Add a coupon or sale deal."""
+    try:
+        from datetime import date as date_type
+
+        if discount_percent is not None and not (0 <= discount_percent <= 100):
+            raise ValueError("Discount percent must be between 0 and 100")
+
+        start = date_type.fromisoformat(start_date) if start_date else None
+        end = date_type.fromisoformat(end_date) if end_date else None
+
+        analytics = Analytics(data_store=get_data_store())
+        deal = analytics.add_deal(
+            item_name=item,
+            store=store,
+            deal_type=deal_type,
+            regular_price=regular_price,
+            deal_price=deal_price,
+            discount_amount=discount_amount,
+            discount_percent=discount_percent,
+            start_date=start,
+            end_date=end,
+            coupon_code=code,
+            source=source,
+            notes=notes,
+        )
+
+        output_data = {
+            "success": True,
+            "message": f"Added {deal_type.value} deal for {item} at {store}",
+            "data": {"deal": deal.model_dump()},
+        }
+        formatter.output(output_data, output_data["message"])
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@deals_app.command("list")
+def deals_list(
+    store: Annotated[str | None, typer.Option("--store", "-s", help="Filter by store")] = None,
+    deal_type: Annotated[
+        DealType | None, typer.Option("--type", "-t", help="Filter by deal type")
+    ] = None,
+    status: Annotated[
+        str, typer.Option("--status", help="Filter: active, upcoming, expired, redeemed, all")
+    ] = "active",
+) -> None:
+    """List tracked deals."""
+    try:
+        ds = get_data_store()
+        deals = ds.load_deals()
+
+        if store:
+            deals = [d for d in deals if d.store.lower() == store.lower()]
+        if deal_type:
+            deals = [d for d in deals if d.deal_type == deal_type]
+
+        status_filter = status.lower()
+        if status_filter not in {"active", "upcoming", "expired", "redeemed", "all"}:
+            raise ValueError("Status must be one of: active, upcoming, expired, redeemed, all")
+
+        if status_filter != "all":
+            filtered: list = []
+            for deal in deals:
+                if deal.redeemed and status_filter == "redeemed":
+                    filtered.append(deal)
+                elif deal.is_expired and status_filter == "expired" and not deal.redeemed:
+                    filtered.append(deal)
+                elif deal.is_active and status_filter == "active":
+                    filtered.append(deal)
+                elif not deal.is_active and not deal.is_expired and status_filter == "upcoming":
+                    filtered.append(deal)
+            deals = filtered
+
+        deal_payloads = []
+        for deal in deals:
+            payload = deal.model_dump()
+            if deal.redeemed:
+                status_value = "redeemed"
+            elif deal.is_expired:
+                status_value = "expired"
+            elif deal.is_active:
+                status_value = "active"
+            else:
+                status_value = "upcoming"
+            payload["status"] = status_value
+            payload["savings_per_unit"] = deal.savings_per_unit
+            deal_payloads.append(payload)
+
+        output_data = {
+            "success": True,
+            "data": {
+                "deals": deal_payloads,
+                "count": len(deal_payloads),
+            },
+        }
+        formatter.output(output_data, f"{len(deal_payloads)} deals")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@deals_app.command("redeem")
+def deals_redeem(
+    deal_id: Annotated[str, typer.Argument(help="Deal ID to redeem")],
+    quantity: Annotated[
+        float, typer.Option("--quantity", "-q", help="Quantity purchased")
+    ] = 1.0,
+    date_str: Annotated[
+        str | None, typer.Option("--date", help="Redemption date (YYYY-MM-DD)")
+    ] = None,
+    savings: Annotated[
+        float | None, typer.Option("--savings", help="Override total savings amount")
+    ] = None,
+    regular_price: Annotated[
+        float | None, typer.Option("--regular-price", help="Regular price per unit")
+    ] = None,
+    paid_price: Annotated[
+        float | None, typer.Option("--paid-price", help="Paid price per unit")
+    ] = None,
+    notes: Annotated[
+        str | None, typer.Option("--notes", "-n", help="Notes")
+    ] = None,
+) -> None:
+    """Redeem a deal and log savings."""
+    try:
+        from datetime import date as date_type
+
+        redeemed_date = date_type.fromisoformat(date_str) if date_str else None
+
+        analytics = Analytics(data_store=get_data_store())
+        deal, record = analytics.redeem_deal(
+            deal_id=deal_id,
+            quantity=quantity,
+            redeemed_date=redeemed_date,
+            savings_override=savings,
+            regular_price=regular_price,
+            paid_price=paid_price,
+            notes=notes,
+        )
+
+        output_data = {
+            "success": True,
+            "message": (
+                f"Redeemed deal for {deal.item_name} "
+                f"(saved ${record.savings_amount:.2f})"
+            ),
+            "data": {
+                "deal": deal.model_dump(),
+                "savings": record.model_dump(),
+            },
+        }
+        formatter.output(output_data, output_data["message"])
+    except ValueError as e:
+        formatter.error(str(e), error_code="DEAL_REDEEM_FAILED")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+# --- Phase 3: Savings subcommand group ---
+savings_app = typer.Typer(help="Savings tracking commands")
+app.add_typer(savings_app, name="savings")
+
+
+@savings_app.command("log")
+def savings_log(
+    item: Annotated[str, typer.Argument(help="Item name")],
+    store: Annotated[
+        str | None, typer.Option("--store", "-s", help="Store name")
+    ] = None,
+    amount: Annotated[
+        float | None, typer.Option("--amount", "-a", help="Savings amount")
+    ] = None,
+    regular_price: Annotated[
+        float | None, typer.Option("--regular-price", help="Regular price per unit")
+    ] = None,
+    paid_price: Annotated[
+        float | None, typer.Option("--paid-price", help="Paid price per unit")
+    ] = None,
+    quantity: Annotated[
+        float, typer.Option("--quantity", "-q", help="Quantity purchased")
+    ] = 1.0,
+    savings_type: Annotated[
+        SavingsType, typer.Option("--type", "-t", help="Savings type")
+    ] = SavingsType.MANUAL,
+    date_str: Annotated[
+        str | None, typer.Option("--date", help="Date (YYYY-MM-DD)")
+    ] = None,
+    notes: Annotated[
+        str | None, typer.Option("--notes", "-n", help="Notes")
+    ] = None,
+) -> None:
+    """Log a savings record."""
+    try:
+        from datetime import date as date_type
+
+        record_date = date_type.fromisoformat(date_str) if date_str else None
+
+        analytics = Analytics(data_store=get_data_store())
+        record = analytics.log_savings(
+            item_name=item,
+            store=store,
+            savings_amount=amount,
+            regular_price=regular_price,
+            paid_price=paid_price,
+            quantity=quantity,
+            savings_type=savings_type,
+            record_date=record_date,
+            notes=notes,
+        )
+
+        output_data = {
+            "success": True,
+            "message": f"Logged savings for {item} (${record.savings_amount:.2f})",
+            "data": {"savings": record.model_dump()},
+        }
+        formatter.output(output_data, output_data["message"])
+    except ValueError as e:
+        formatter.error(str(e), error_code="SAVINGS_LOG_FAILED")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@savings_app.command("list")
+def savings_list(
+    store: Annotated[
+        str | None, typer.Option("--store", "-s", help="Filter by store")
+    ] = None,
+    savings_type: Annotated[
+        SavingsType | None, typer.Option("--type", "-t", help="Filter by type")
+    ] = None,
+) -> None:
+    """List savings records."""
+    try:
+        ds = get_data_store()
+        records = ds.load_savings()
+
+        if store:
+            records = [r for r in records if r.store and r.store.lower() == store.lower()]
+        if savings_type:
+            records = [r for r in records if r.savings_type == savings_type]
+
+        output_data = {
+            "success": True,
+            "data": {
+                "savings": [r.model_dump() for r in records],
+                "count": len(records),
+            },
+        }
+        formatter.output(output_data, f"{len(records)} savings records")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@savings_app.command("summary")
+def savings_summary(
+    period: Annotated[
+        str, typer.Option("--period", "-p", help="Period: weekly, monthly, yearly")
+    ] = "monthly",
+) -> None:
+    """View savings summary."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        summary = analytics.savings_summary(period=period)
+
+        output_data = {
+            "success": True,
+            "data": {
+                "savings_summary": summary.model_dump(),
+            },
+        }
+        formatter.output(output_data, f"Savings summary ({period})")
     except Exception as e:
         formatter.error(str(e))
         raise typer.Exit(code=1)

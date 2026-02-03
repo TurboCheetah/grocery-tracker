@@ -49,7 +49,7 @@ def sample_item():
         brand_preference=None,
         estimated_price=2.99,
         priority=Priority.MEDIUM,
-        added_by="Alice",
+        added_by="Francisco",
         notes="Ripe ones",
         status=ItemStatus.TO_BUY,
     )
@@ -63,7 +63,7 @@ def sample_receipt():
         store_location="Rockville, MD",
         transaction_date=date(2026, 1, 25),
         transaction_time=time(14, 32),
-        purchased_by="Alice",
+        purchased_by="Francisco",
         line_items=[
             LineItem(
                 item_name="Bananas",
@@ -345,7 +345,7 @@ class TestOutOfStockOperations:
             store="Giant",
             recorded_date=date(2026, 1, 25),
             substitution="Almond Milk",
-            reported_by="Alice",
+            reported_by="Francisco",
         )
         record_id = sqlite_store.add_out_of_stock(record)
 
@@ -420,7 +420,7 @@ class TestWasteLogOperations:
             waste_logged_date=date(2026, 1, 28),
             reason=WasteReason.SPOILED,
             estimated_cost=2.99,
-            logged_by="Alice",
+            logged_by="Francisco",
         )
         sqlite_store.add_waste_record(record)
 
@@ -484,7 +484,7 @@ class TestUserPreferencesOperations:
     def test_save_and_load_user_preferences(self, sqlite_store):
         """Test saving and loading user preferences."""
         prefs = UserPreferences(
-            user="Alice",
+            user="Francisco",
             brand_preferences={"milk": "Organic Valley", "eggs": "Vital Farms"},
             dietary_restrictions=["dairy-free"],
             allergens=["peanuts"],
@@ -493,7 +493,7 @@ class TestUserPreferencesOperations:
         )
         sqlite_store.save_user_preferences(prefs)
 
-        loaded = sqlite_store.get_user_preferences("Alice")
+        loaded = sqlite_store.get_user_preferences("Francisco")
         assert loaded is not None
         assert loaded.brand_preferences["milk"] == "Organic Valley"
         assert "dairy-free" in loaded.dietary_restrictions
@@ -507,21 +507,21 @@ class TestUserPreferencesOperations:
     def test_save_and_load_all_preferences(self, sqlite_store):
         """Test bulk save and load of preferences."""
         preferences = {
-            "Alice": UserPreferences(
-                user="Alice",
+            "Francisco": UserPreferences(
+                user="Francisco",
                 brand_preferences={"milk": "Organic Valley"},
             ),
-            "Bob": UserPreferences(
-                user="Bob",
+            "Loki": UserPreferences(
+                user="Loki",
                 dietary_restrictions=["vegetarian"],
             ),
         }
         sqlite_store.save_preferences(preferences)
 
         loaded = sqlite_store.load_preferences()
-        assert "Alice" in loaded
-        assert "Bob" in loaded
-        assert loaded["Bob"].dietary_restrictions == ["vegetarian"]
+        assert "Francisco" in loaded
+        assert "Loki" in loaded
+        assert loaded["Loki"].dietary_restrictions == ["vegetarian"]
 
 
 class TestDataIntegrity:

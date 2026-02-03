@@ -2,7 +2,7 @@
 
 **Version**: 1.0  
 **Date**: January 26, 2026  
-**Author**: Alice  
+**Author**: Francisco  
 **Status**: Draft for Review
 
 ---
@@ -27,7 +27,7 @@ A comprehensive grocery tracking and household inventory management system desig
 
 **Rationale for Python:**
 - Superior libraries for data processing and analytics (Pydantic, datetime)
-- Alice's existing expertise and professional experience
+- Francisco's existing expertise and professional experience
 - Rapid development and iteration capabilities
 - Excellent for data-heavy operations (price tracking, frequency analysis)
 - Strong support for JSON data persistence
@@ -68,7 +68,7 @@ A comprehensive grocery tracking and household inventory management system desig
 name = "grocery-tracker"
 version = "0.1.0"
 description = "Intelligent grocery list and inventory management"
-authors = [{name = "Alice", email = "alice@example.com"}]
+authors = [{name = "Francisco", email = "francisco@example.com"}]
 requires-python = ">=3.12"
 dependencies = [
     "rich>=13.7.0",
@@ -141,11 +141,11 @@ typical_categories = ["Produce", "Dairy", "Meat", "Bakery"]
 name = "Trader Joe's"
 typical_categories = ["Produce", "Frozen", "Snacks"]
 
-[users.alice]
+[users.francisco]
 dietary_restrictions = []
 favorite_stores = ["Giant", "Trader Joe's"]
 
-[users.bob]
+[users.loki]
 dietary_restrictions = ["vegetarian"]
 favorite_stores = ["Whole Foods", "Trader Joe's"]
 ```
@@ -268,8 +268,8 @@ monthly_budget = config.budget.monthly_limit
 
 ### Primary Users
 
-**Alice** — Tech-savvy, professional fit specialist, detail-oriented data tracker  
-**Bob** — Household member, grocery co-manager, shared shopping responsibilities
+**Francisco** — ASD1, tech-savvy, runs Gentoo, professional fit specialist, detail-oriented data tracker  
+**Loki** — Household member, grocery co-manager, shared shopping responsibilities
 
 ### User Stories
 
@@ -291,8 +291,8 @@ monthly_budget = config.budget.monthly_limit
 - "Suggest what to buy" → Proactive recommendations based on frequency
 
 #### Shared Household
-- "What brand milk does Bob prefer?" → "Horizon Organic"
-- "What are Alice's dietary restrictions?" → Shows saved preferences
+- "What brand milk does Loki prefer?" → "Horizon Organic"
+- "What are Francisco's dietary restrictions?" → Shows saved preferences
 - "Who bought groceries last?" → Shows purchase attribution from last receipt
 
 ---
@@ -321,7 +321,7 @@ monthly_budget = config.budget.monthly_limit
   "brand_preference": "string | null",
   "estimated_price": "number | null",
   "priority": "high | medium | low",
-  "added_by": "Alice | Bob",
+  "added_by": "Francisco | Loki",
   "added_at": "ISO8601 timestamp",
   "notes": "string | null"
 }
@@ -366,7 +366,7 @@ monthly_budget = config.budget.monthly_limit
   "store_location": "string | null",
   "transaction_date": "ISO8601 date",
   "transaction_time": "HH:MM",
-  "purchased_by": "Alice | Bob",
+  "purchased_by": "Francisco | Loki",
   "line_items": [
     {
       "item_name": "string",
@@ -539,7 +539,7 @@ STILL NEEDED:
   "store": "string",
   "date": "ISO8601",
   "substitution": "string | null",
-  "reported_by": "Alice | Bob"
+  "reported_by": "Francisco | Loki"
 }
 ```
 
@@ -583,7 +583,7 @@ STILL NEEDED:
   "waste_logged_date": "ISO8601",
   "reason": "spoiled | never_used | overripe | other",
   "estimated_cost": "number",
-  "logged_by": "Alice | Bob"
+  "logged_by": "Francisco | Loki"
 }
 ```
 
@@ -593,16 +593,16 @@ STILL NEEDED:
 - **Prioritized list** — "Items to use first: [sorted by expiration]"
 
 #### 3.4 Shared Household Preferences
-- **Brand preferences by person** — "Alice: Organic Valley, Bob: Horizon"
+- **Brand preferences by person** — "Francisco: Organic Valley, Loki: Horizon"
 - **Dietary restrictions** — Allergies, vegetarian, vegan, gluten-free, etc.
-- **Favorite items** — "Bob loves mango, Alice prefers pineapple"
+- **Favorite items** — "Loki loves mango, Francisco prefers pineapple"
 - **Purchase attribution** — "Who bought this receipt?"
-- **Shopping history** — "Alice shops Saturdays, Bob Wednesdays"
+- **Shopping history** — "Francisco shops Saturdays, Loki Wednesdays"
 
 **Data Model (User Preferences):**
 ```json
 {
-  "user": "Alice | Bob",
+  "user": "Francisco | Loki",
   "brand_preferences": {
     "milk": "Organic Valley",
     "eggs": "Vital Farms"
@@ -645,7 +645,7 @@ grocery-tracker/
 │   ├── frequency_data.json        # Purchase frequency tracking
 │   ├── inventory.json             # Current household inventory
 │   ├── waste_log.json             # Waste tracking
-│   ├── user_preferences.json      # Alice & Bob preferences
+│   ├── user_preferences.json      # Francisco & Loki preferences
 │   └── budget.json                # Budget tracking
 ├── src/
 │   └── grocery_tracker/           # Main package
@@ -2165,7 +2165,7 @@ def temp_data_dir(tmp_path):
 - Recipe cost calculator
 
 ### External Integrations
-- Optional notes database sync
+- Notion database sync (Francisco uses Notion heavily)
 - Google Sheets export
 - YNAB/Mint budget sync
 - Instacart/grocery delivery API integration
@@ -2177,7 +2177,7 @@ def temp_data_dir(tmp_path):
 - Personalized recommendation engine
 
 ### Collaborative Features
-- Shared shopping assignments ("Bob, can you grab milk?")
+- Shared shopping assignments ("Loki, can you grab milk?")
 - Real-time list syncing (both can edit simultaneously)
 - Shopping trip coordination ("Who's going when?")
 
@@ -2237,7 +2237,7 @@ def temp_data_dir(tmp_path):
       "brand_preference": null,
       "estimated_price": 0.49,
       "priority": "medium",
-      "added_by": "Alice",
+      "added_by": "Francisco",
       "added_at": "2026-01-25T08:15:00Z",
       "notes": null,
       "status": "to_buy"
@@ -2253,7 +2253,7 @@ def temp_data_dir(tmp_path):
       "brand_preference": "Organic Valley",
       "estimated_price": 5.49,
       "priority": "high",
-      "added_by": "Bob",
+      "added_by": "Loki",
       "added_at": "2026-01-26T07:00:00Z",
       "notes": "Whole milk",
       "status": "to_buy"
@@ -2270,7 +2270,7 @@ def temp_data_dir(tmp_path):
   "store_location": "Rockville, MD",
   "transaction_date": "2026-01-25",
   "transaction_time": "14:32",
-  "purchased_by": "Alice",
+  "purchased_by": "Francisco",
   "line_items": [
     {
       "item_name": "BANANAS",
@@ -2301,10 +2301,10 @@ def temp_data_dir(tmp_path):
 
 ## Appendix B: User Preference Examples
 
-### Alice's Preferences
+### Francisco's Preferences
 ```json
 {
-  "user": "Alice",
+  "user": "Francisco",
   "brand_preferences": {
     "milk": "Organic Valley",
     "eggs": "Vital Farms",
@@ -2332,10 +2332,10 @@ def temp_data_dir(tmp_path):
 }
 ```
 
-### Bob's Preferences
+### Loki's Preferences
 ```json
 {
-  "user": "Bob",
+  "user": "Loki",
   "brand_preferences": {
     "milk": "Horizon Organic",
     "yogurt": "Chobani"
@@ -2362,7 +2362,7 @@ def temp_data_dir(tmp_path):
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | 2026-01-26 | Alice | Initial PRD based on discovery interview |
+| 1.0 | 2026-01-26 | Francisco | Initial PRD based on discovery interview |
 
 ---
 

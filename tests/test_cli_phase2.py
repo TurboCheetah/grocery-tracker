@@ -196,13 +196,13 @@ class TestOutOfStockReportCommand:
                 "--sub",
                 "Almond Milk",
                 "--by",
-                "Alice",
+                "Francisco",
             ],
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["data"]["record"]["substitution"] == "Almond Milk"
-        assert output["data"]["record"]["reported_by"] == "Alice"
+        assert output["data"]["record"]["reported_by"] == "Francisco"
 
     def test_report_rich_mode(self, cli_data_dir):
         """Report command in Rich mode doesn't crash."""

@@ -282,7 +282,7 @@
 | CLI command reference | DONE | All implemented commands documented |
 | Error handling guidance | DONE | Duplicate, not found, invalid data |
 | Output formatting guidance | DONE | Telegram/Signal/text-only formats |
-| Multi-user context | DONE | Alice/Bob preferences noted |
+| Multi-user context | DONE | Francisco/Loki preferences noted |
 
 ---
 
