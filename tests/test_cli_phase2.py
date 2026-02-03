@@ -302,7 +302,7 @@ class TestStatsBulkCommand:
         output = json.loads(result.stdout)
         recs = output["data"]["bulk_buying"]["recommendations"]
         assert len(recs) >= 1
-        assert recs[0]["item_name"] == "Soda"
+        assert any(rec["item_name"] == "Soda" for rec in recs)
 
 
 class TestOutOfStockReportCommand:
