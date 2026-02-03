@@ -66,6 +66,7 @@ class LineItem(BaseModel):
     quantity: float = 1.0
     unit_price: float
     total_price: float
+    category: str | None = None
     matched_list_item_id: UUID | None = None
 
 
