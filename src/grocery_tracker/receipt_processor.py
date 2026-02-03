@@ -105,6 +105,9 @@ class ReceiptProcessor:
                         price=receipt_item.total_price,
                     )
 
+                    if receipt_item.category is None and list_item.get("category"):
+                        receipt_item.category = list_item["category"]
+
                     # Update matched_list_item_id in receipt
                     receipt_item.matched_list_item_id = UUID(str(list_item["id"]))
                     break
@@ -131,11 +134,13 @@ class ReceiptProcessor:
 
         # Update frequency data for all purchased items
         for receipt_item in receipt_input.line_items:
+            category = receipt_item.category or "Other"
             self.data_store.update_frequency(
                 item_name=receipt_item.item_name,
                 purchase_date=receipt_input.transaction_date,
                 quantity=receipt_item.quantity,
                 store=receipt_input.store_name,
+                category=category,
             )
 
         return ReconciliationResult(

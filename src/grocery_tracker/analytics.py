@@ -65,8 +65,7 @@ class Analytics:
 
         for receipt in period_receipts:
             for item in receipt.line_items:
-                # Try to find category from list
-                cat = self._guess_category(item.item_name)
+                cat = item.category or "Other"
                 category_totals[cat] += item.total_price
                 category_counts[cat] += 1
 
@@ -342,7 +341,7 @@ class Analytics:
             receipt: A Receipt object
         """
         for item in receipt.line_items:
-            cat = self._guess_category(item.item_name)
+            cat = item.category or "Other"
             self.data_store.update_frequency(
                 item_name=item.item_name,
                 purchase_date=receipt.transaction_date,
@@ -458,113 +457,6 @@ class Analytics:
         if count >= 5:
             return "medium"
         return "low"
-
-    def _guess_category(self, item_name: str) -> str:
-        """Guess category from item name. Simple heuristic."""
-        name = item_name.lower()
-
-        produce = [
-            "banana",
-            "apple",
-            "avocado",
-            "tomato",
-            "lettuce",
-            "onion",
-            "potato",
-            "carrot",
-            "pepper",
-            "strawberr",
-            "blueberr",
-            "orange",
-            "lemon",
-            "lime",
-            "grape",
-            "mango",
-            "pear",
-            "celery",
-            "broccoli",
-            "spinach",
-            "kale",
-            "cucumber",
-            "garlic",
-            "ginger",
-            "mushroom",
-            "corn",
-            "bean",
-            "pea",
-        ]
-        dairy = ["milk", "cheese", "yogurt", "butter", "cream", "egg"]
-        meat = [
-            "chicken",
-            "beef",
-            "pork",
-            "turkey",
-            "fish",
-            "salmon",
-            "shrimp",
-            "steak",
-            "bacon",
-            "sausage",
-            "ham",
-        ]
-        bakery = [
-            "bread",
-            "bagel",
-            "muffin",
-            "roll",
-            "cake",
-            "donut",
-            "croissant",
-            "tortilla",
-            "bun",
-        ]
-        frozen = ["frozen", "ice cream", "pizza"]
-        beverages = ["juice", "soda", "water", "coffee", "tea", "wine", "beer", "kombucha"]
-        snacks = [
-            "chips",
-            "cookie",
-            "cracker",
-            "popcorn",
-            "pretzel",
-            "candy",
-            "chocolate",
-            "granola bar",
-            "nut",
-        ]
-        pantry = [
-            "rice",
-            "pasta",
-            "sauce",
-            "oil",
-            "vinegar",
-            "sugar",
-            "flour",
-            "salt",
-            "spice",
-            "cereal",
-            "oat",
-            "can",
-            "soup",
-            "broth",
-        ]
-
-        categories = [
-            (produce, "Produce"),
-            (dairy, "Dairy & Eggs"),
-            (meat, "Meat & Seafood"),
-            (bakery, "Bakery"),
-            (frozen, "Frozen Foods"),
-            (beverages, "Beverages"),
-            (snacks, "Snacks"),
-            (pantry, "Pantry & Canned Goods"),
-        ]
-
-        for keywords, category in categories:
-            for kw in keywords:
-                if kw in name:
-                    return category
-
-        return "Other"
 
     # --- Waste Analytics ---
 

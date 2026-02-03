@@ -408,39 +408,6 @@ class TestSeasonalPatterns:
         assert patterns[1].item_name == "Strawberries"
 
 
-class TestCategoryGuessing:
-    """Tests for category guessing heuristic."""
-
-    def test_produce(self, analytics):
-        assert analytics._guess_category("Bananas") == "Produce"
-        assert analytics._guess_category("organic apples") == "Produce"
-
-    def test_dairy(self, analytics):
-        assert analytics._guess_category("Whole Milk") == "Dairy & Eggs"
-        assert analytics._guess_category("Sharp Cheese") == "Dairy & Eggs"
-
-    def test_meat(self, analytics):
-        assert analytics._guess_category("Chicken Breast") == "Meat & Seafood"
-
-    def test_bakery(self, analytics):
-        assert analytics._guess_category("Sourdough Bread") == "Bakery"
-
-    def test_beverages(self, analytics):
-        assert analytics._guess_category("Kombucha") == "Beverages"
-
-    def test_snacks(self, analytics):
-        assert analytics._guess_category("Pretzels") == "Snacks"
-
-    def test_pantry(self, analytics):
-        assert analytics._guess_category("Brown Rice") == "Pantry & Canned Goods"
-
-    def test_frozen(self, analytics):
-        assert analytics._guess_category("Frozen Pizza") == "Frozen Foods"
-
-    def test_unknown(self, analytics):
-        assert analytics._guess_category("Detergent") == "Other"
-
-
 class TestUpdateFrequencyFromReceipt:
     """Tests for updating frequency from receipt."""
 
