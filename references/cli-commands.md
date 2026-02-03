@@ -206,7 +206,13 @@ grocery receipt process --file receipt.json --json
   "transaction_date": "2026-01-25",
   "transaction_time": "14:32",
   "line_items": [
-    {"item_name": "Bananas", "quantity": 3, "unit_price": 0.49, "total_price": 1.47}
+    {
+      "item_name": "Bananas",
+      "quantity": 3,
+      "unit_price": 0.49,
+      "total_price": 1.47,
+      "category": "Produce"
+    }
   ],
   "subtotal": 1.47,
   "tax": 0.00,
@@ -214,6 +220,8 @@ grocery receipt process --file receipt.json --json
   "payment_method": "Credit"
 }
 ```
+
+**Note:** `line_items[].category` is optional but recommended. The skill/LLM layer should populate it for better analytics.
 
 **Response:**
 ```json

@@ -24,7 +24,12 @@ class TestRenderSpending:
                     "receipt_count": 8,
                     "item_count": 45,
                     "categories": [
-                        {"category": "Produce", "total": 80.00, "percentage": 17.8, "item_count": 15},
+                        {
+                            "category": "Produce",
+                            "total": 80.00,
+                            "percentage": 17.8,
+                            "item_count": 15,
+                        },
                     ],
                     "budget_limit": None,
                     "budget_remaining": None,
@@ -271,3 +276,39 @@ class TestRenderFrequency:
         output = fmt.console.file.getvalue()
         assert "Bread" in output
         assert "low" in output
+
+
+class TestRenderSeasonalPatterns:
+    """Tests for seasonal pattern rendering."""
+
+    def test_render_seasonal_list(self):
+        """Renders seasonal patterns list."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "seasonal_items": [
+                    {
+                        "item_name": "Strawberries",
+                        "season_range": "May-July",
+                        "peak_months": ["May", "June", "July"],
+                        "total_purchases": 7,
+                        "confidence": "medium",
+                    },
+                    {
+                        "item_name": "Apples",
+                        "season_range": "September-October",
+                        "peak_months": ["September", "October"],
+                        "total_purchases": 4,
+                        "confidence": "low",
+                    },
+                ],
+                "total_items": 2,
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Seasonal Patterns" in output
+        assert "Strawberries" in output
+        assert "May-July" in output
+        assert "Apples" in output

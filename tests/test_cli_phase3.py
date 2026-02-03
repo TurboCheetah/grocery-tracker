@@ -6,8 +6,8 @@ from datetime import date, timedelta
 import pytest
 from typer.testing import CliRunner
 
-from grocery_tracker.main import app
 from grocery_tracker.data_store import DataStore
+from grocery_tracker.main import app
 
 runner = CliRunner()
 
@@ -34,7 +34,9 @@ class TestInventoryAdd:
 
     def test_add_basic(self, cli_data_dir):
         """Add a basic inventory item."""
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Milk"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Milk"]
+        )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
@@ -45,13 +47,24 @@ class TestInventoryAdd:
         result = runner.invoke(
             app,
             [
-                "--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Yogurt",
-                "--quantity", "3",
-                "--unit", "cups",
-                "--category", "Dairy & Eggs",
-                "--location", "fridge",
-                "--threshold", "2",
-                "--by", "Alice",
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "add",
+                "Yogurt",
+                "--quantity",
+                "3",
+                "--unit",
+                "cups",
+                "--category",
+                "Dairy & Eggs",
+                "--location",
+                "fridge",
+                "--threshold",
+                "2",
+                "--by",
+                "Alice",
             ],
         )
         assert result.exit_code == 0
@@ -64,7 +77,16 @@ class TestInventoryAdd:
         exp = (date.today() + timedelta(days=7)).isoformat()
         result = runner.invoke(
             app,
-            ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Milk", "--expires", exp],
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "add",
+                "Milk",
+                "--expires",
+                exp,
+            ],
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
@@ -81,10 +103,14 @@ class TestInventoryRemove:
 
     def test_remove(self, cli_data_dir):
         """Remove an inventory item."""
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Milk"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Milk"]
+        )
         item_id = json.loads(result.stdout)["data"]["inventory_item"]["id"]
 
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "remove", item_id])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "remove", item_id]
+        )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
@@ -92,7 +118,15 @@ class TestInventoryRemove:
     def test_remove_not_found(self, cli_data_dir):
         """Remove nonexistent item fails."""
         result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "remove", "00000000-0000-0000-0000-000000000000"]
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "remove",
+                "00000000-0000-0000-0000-000000000000",
+            ],
         )
         assert result.exit_code == 1
 
@@ -102,7 +136,9 @@ class TestInventoryList:
 
     def test_list_empty(self, cli_data_dir):
         """Empty inventory."""
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "list"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "list"]
+        )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["data"]["inventory"] == []
@@ -112,18 +148,53 @@ class TestInventoryList:
         runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Milk"])
         runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Rice"])
 
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "list"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "list"]
+        )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["data"]["count"] == 2
 
     def test_list_filter_location(self, cli_data_dir):
         """Filter by location."""
-        runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Milk", "--location", "fridge"])
-        runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Rice", "--location", "pantry"])
+        runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "add",
+                "Milk",
+                "--location",
+                "fridge",
+            ],
+        )
+        runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "add",
+                "Rice",
+                "--location",
+                "pantry",
+            ],
+        )
 
         result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "list", "--location", "fridge"]
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "list",
+                "--location",
+                "fridge",
+            ],
         )
         output = json.loads(result.stdout)
         assert output["data"]["count"] == 1
@@ -140,7 +211,9 @@ class TestInventoryExpiring:
 
     def test_expiring_empty(self, cli_data_dir):
         """No expiring items."""
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "expiring"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "expiring"]
+        )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["data"]["expiring"] == []
@@ -149,9 +222,21 @@ class TestInventoryExpiring:
         """Items expiring soon show up."""
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
         runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Milk", "--expires", tomorrow]
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "add",
+                "Milk",
+                "--expires",
+                tomorrow,
+            ],
         )
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "expiring", "--days", "3"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "expiring", "--days", "3"]
+        )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["data"]["count"] == 1
@@ -167,16 +252,31 @@ class TestInventoryLowStock:
 
     def test_low_stock_empty(self, cli_data_dir):
         """No low stock items."""
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "low-stock"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "low-stock"]
+        )
         assert result.exit_code == 0
 
     def test_low_stock_with_items(self, cli_data_dir):
         """Low stock items show up."""
         runner.invoke(
             app,
-            ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Eggs", "--quantity", "1", "--threshold", "3"],
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "add",
+                "Eggs",
+                "--quantity",
+                "1",
+                "--threshold",
+                "3",
+            ],
         )
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "low-stock"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "low-stock"]
+        )
         output = json.loads(result.stdout)
         assert output["data"]["count"] == 1
 
@@ -192,12 +292,32 @@ class TestInventoryUse:
     def test_use_item(self, cli_data_dir):
         """Use/consume an inventory item."""
         result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "add", "Eggs", "--quantity", "12"]
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "add",
+                "Eggs",
+                "--quantity",
+                "12",
+            ],
         )
         item_id = json.loads(result.stdout)["data"]["inventory_item"]["id"]
 
         result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "inventory", "use", item_id, "--quantity", "4"]
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "use",
+                item_id,
+                "--quantity",
+                "4",
+            ],
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
@@ -225,10 +345,18 @@ class TestWasteLog:
         result = runner.invoke(
             app,
             [
-                "--json", "--data-dir", str(cli_data_dir), "waste", "log", "Bread",
-                "--reason", "spoiled",
-                "--cost", "3.99",
-                "--by", "Bob",
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "waste",
+                "log",
+                "Bread",
+                "--reason",
+                "spoiled",
+                "--cost",
+                "3.99",
+                "--by",
+                "Bob",
             ],
         )
         assert result.exit_code == 0
@@ -275,10 +403,30 @@ class TestWasteList:
     def test_list_filter_reason(self, cli_data_dir):
         """Filter by reason."""
         runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "waste", "log", "Milk", "--reason", "spoiled"]
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "waste",
+                "log",
+                "Milk",
+                "--reason",
+                "spoiled",
+            ],
         )
         runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "waste", "log", "Bread", "--reason", "never_used"]
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "waste",
+                "log",
+                "Bread",
+                "--reason",
+                "never_used",
+            ],
         )
 
         result = runner.invoke(
@@ -306,7 +454,19 @@ class TestWasteSummary:
     def test_summary_with_data(self, cli_data_dir):
         """Summary with waste data."""
         runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "waste", "log", "Milk", "--cost", "5.49", "--reason", "spoiled"]
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "waste",
+                "log",
+                "Milk",
+                "--cost",
+                "5.49",
+                "--reason",
+                "spoiled",
+            ],
         )
         result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "waste", "summary"])
         output = json.loads(result.stdout)
@@ -327,7 +487,9 @@ class TestBudgetSet:
 
     def test_set_budget(self, cli_data_dir):
         """Set a monthly budget."""
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "budget", "set", "500"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "budget", "set", "500"]
+        )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
@@ -370,14 +532,25 @@ class TestPreferencesView:
 
     def test_view_no_prefs(self, cli_data_dir):
         """View with no preferences set."""
-        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Alice"])
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Alice"]
+        )
         assert result.exit_code == 0  # warns, doesn't fail
 
     def test_view_with_prefs(self, cli_data_dir):
         """View after setting preferences."""
         runner.invoke(
             app,
-            ["--json", "--data-dir", str(cli_data_dir), "preferences", "set", "Alice", "--favorite", "mango"],
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--favorite",
+                "mango",
+            ],
         )
         result = runner.invoke(
             app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Alice"]
@@ -391,9 +564,19 @@ class TestPreferencesView:
         """View in Rich mode."""
         runner.invoke(
             app,
-            ["--data-dir", str(cli_data_dir), "preferences", "set", "Alice", "--favorite", "mango"],
+            [
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--favorite",
+                "mango",
+            ],
         )
-        result = runner.invoke(app, ["--data-dir", str(cli_data_dir), "preferences", "view", "Alice"])
+        result = runner.invoke(
+            app, ["--data-dir", str(cli_data_dir), "preferences", "view", "Alice"]
+        )
         assert result.exit_code == 0
 
 
@@ -404,7 +587,16 @@ class TestPreferencesSet:
         """Set brand preference."""
         result = runner.invoke(
             app,
-            ["--json", "--data-dir", str(cli_data_dir), "preferences", "set", "Alice", "--brand", "milk:Organic Valley"],
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--brand",
+                "milk:Organic Valley",
+            ],
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
@@ -414,7 +606,16 @@ class TestPreferencesSet:
         """Set dietary restriction."""
         result = runner.invoke(
             app,
-            ["--json", "--data-dir", str(cli_data_dir), "preferences", "set", "Bob", "--dietary", "vegetarian"],
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Bob",
+                "--dietary",
+                "vegetarian",
+            ],
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
@@ -424,7 +625,16 @@ class TestPreferencesSet:
         """Set allergen."""
         result = runner.invoke(
             app,
-            ["--json", "--data-dir", str(cli_data_dir), "preferences", "set", "Alice", "--allergen", "peanuts"],
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--allergen",
+                "peanuts",
+            ],
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
@@ -435,10 +645,18 @@ class TestPreferencesSet:
         result = runner.invoke(
             app,
             [
-                "--json", "--data-dir", str(cli_data_dir), "preferences", "set", "Alice",
-                "--favorite", "mango",
-                "--favorite", "dark chocolate",
-                "--dietary", "lactose_intolerant",
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--favorite",
+                "mango",
+                "--favorite",
+                "dark chocolate",
+                "--dietary",
+                "lactose_intolerant",
             ],
         )
         assert result.exit_code == 0
@@ -449,7 +667,15 @@ class TestPreferencesSet:
         """Set in Rich mode."""
         result = runner.invoke(
             app,
-            ["--data-dir", str(cli_data_dir), "preferences", "set", "Alice", "--favorite", "mango"],
+            [
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--favorite",
+                "mango",
+            ],
         )
         assert result.exit_code == 0
 
@@ -457,11 +683,29 @@ class TestPreferencesSet:
         """Setting preferences updates existing ones."""
         runner.invoke(
             app,
-            ["--json", "--data-dir", str(cli_data_dir), "preferences", "set", "Alice", "--favorite", "mango"],
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--favorite",
+                "mango",
+            ],
         )
         runner.invoke(
             app,
-            ["--json", "--data-dir", str(cli_data_dir), "preferences", "set", "Alice", "--dietary", "vegetarian"],
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--dietary",
+                "vegetarian",
+            ],
         )
 
         result = runner.invoke(

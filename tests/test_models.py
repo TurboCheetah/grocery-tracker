@@ -302,9 +302,7 @@ class TestCategorySpending:
 
     def test_create(self):
         """Create category spending."""
-        cs = CategorySpending(
-            category="Produce", total=80.00, percentage=18.0, item_count=15
-        )
+        cs = CategorySpending(category="Produce", total=80.00, percentage=18.0, item_count=15)
         assert cs.category == "Produce"
         assert cs.total == 80.00
         assert cs.percentage == 18.0

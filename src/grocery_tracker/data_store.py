@@ -120,9 +120,16 @@ def json_decoder(data: dict[str, Any]) -> dict[str, Any]:
                 except ValueError:
                     pass
             # Try to parse as date
-            elif key in ("transaction_date", "date", "recorded_date",
-                         "expiration_date", "opened_date", "purchased_date",
-                         "original_purchase_date", "waste_logged_date"):
+            elif key in (
+                "transaction_date",
+                "date",
+                "recorded_date",
+                "expiration_date",
+                "opened_date",
+                "purchased_date",
+                "original_purchase_date",
+                "waste_logged_date",
+            ):
                 try:
                     data[key] = date.fromisoformat(value)
                 except ValueError:
@@ -411,9 +418,7 @@ class DataStore:
 
         result: dict[str, FrequencyData] = {}
         for item_name, freq_data in data.items():
-            purchases = [
-                PurchaseRecord(**p) for p in freq_data.get("purchase_history", [])
-            ]
+            purchases = [PurchaseRecord(**p) for p in freq_data.get("purchase_history", [])]
             result[item_name] = FrequencyData(
                 item_name=item_name,
                 category=freq_data.get("category", "Other"),
@@ -457,9 +462,7 @@ class DataStore:
         frequency = self.load_frequency_data()
 
         if item_name not in frequency:
-            frequency[item_name] = FrequencyData(
-                item_name=item_name, category=category
-            )
+            frequency[item_name] = FrequencyData(item_name=item_name, category=category)
 
         frequency[item_name].purchase_history.append(
             PurchaseRecord(date=purchase_date, quantity=quantity, store=store)
@@ -505,9 +508,7 @@ class DataStore:
         path = self._out_of_stock_path()
 
         with open(path, "w") as f:
-            json.dump(
-                [r.model_dump() for r in records], f, cls=JSONEncoder, indent=2
-            )
+            json.dump([r.model_dump() for r in records], f, cls=JSONEncoder, indent=2)
 
     def add_out_of_stock(self, record: OutOfStockRecord) -> UUID:
         """Add an out-of-stock record.
@@ -536,9 +537,7 @@ class DataStore:
             List of matching OutOfStockRecord
         """
         records = self.load_out_of_stock()
-        filtered = [
-            r for r in records if r.item_name.lower() == item_name.lower()
-        ]
+        filtered = [r for r in records if r.item_name.lower() == item_name.lower()]
         if store:
             filtered = [r for r in filtered if r.store.lower() == store.lower()]
         return filtered
@@ -573,9 +572,7 @@ class DataStore:
         path = self._inventory_path()
 
         with open(path, "w") as f:
-            json.dump(
-                [i.model_dump() for i in items], f, cls=JSONEncoder, indent=2
-            )
+            json.dump([i.model_dump() for i in items], f, cls=JSONEncoder, indent=2)
 
     # --- Waste Log Operations ---
 
@@ -607,9 +604,7 @@ class DataStore:
         path = self._waste_log_path()
 
         with open(path, "w") as f:
-            json.dump(
-                [r.model_dump() for r in records], f, cls=JSONEncoder, indent=2
-            )
+            json.dump([r.model_dump() for r in records], f, cls=JSONEncoder, indent=2)
 
     def add_waste_record(self, record: WasteRecord) -> UUID:
         """Add a waste record.
@@ -655,9 +650,7 @@ class DataStore:
             return None
 
         budget_data = budgets[month]
-        cat_budgets = [
-            CategoryBudget(**cb) for cb in budget_data.get("category_budgets", [])
-        ]
+        cat_budgets = [CategoryBudget(**cb) for cb in budget_data.get("category_budgets", [])]
         return BudgetTracking(
             month=month,
             monthly_limit=budget_data.get("monthly_limit", 0.0),
@@ -703,9 +696,7 @@ class DataStore:
         with open(path) as f:
             data = json.load(f)
 
-        return {
-            name: UserPreferences(**prefs) for name, prefs in data.items()
-        }
+        return {name: UserPreferences(**prefs) for name, prefs in data.items()}
 
     def save_preferences(self, preferences: dict[str, UserPreferences]) -> None:
         """Save user preferences.

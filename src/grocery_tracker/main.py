@@ -458,6 +458,57 @@ def stats_frequency(
         raise typer.Exit(code=1)
 
 
+@stats_app.command("seasonal")
+def stats_seasonal(
+    item: Annotated[str | None, typer.Argument(help="Item name (omit when using --all)")] = None,
+    all_items: Annotated[
+        bool, typer.Option("--all", help="Show seasonal patterns for all items")
+    ] = False,
+) -> None:
+    """View seasonal purchase patterns for an item or all items."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        if all_items:
+            patterns = analytics.get_seasonal_patterns()
+            output_data = {
+                "success": True,
+                "data": {
+                    "seasonal_items": [p.model_dump() for p in patterns],
+                    "total_items": len(patterns),
+                },
+            }
+            formatter.output(
+                output_data,
+                (
+                    f"Seasonal patterns for {len(patterns)} items"
+                    if patterns
+                    else "No seasonal patterns"
+                ),
+            )
+            return
+
+        if not item:
+            formatter.error("Provide an item name or use --all")
+            raise typer.Exit(code=1)
+
+        pattern = analytics.get_seasonal_pattern(item)
+
+        if not pattern:
+            formatter.warning(f"No seasonal pattern data for '{item}'")
+            return
+
+        output_data = {
+            "success": True,
+            "data": {
+                "seasonal": pattern.model_dump(),
+            },
+        }
+        formatter.output(output_data, f"Seasonal pattern for {pattern.item_name}")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
 @stats_app.command("compare")
 def stats_compare(
     item: Annotated[str, typer.Argument(help="Item name to compare prices")],
@@ -517,9 +568,7 @@ def oos_report(
     substitution: Annotated[
         str | None, typer.Option("--sub", "-s", help="What was bought instead")
     ] = None,
-    reported_by: Annotated[
-        str | None, typer.Option("--by", help="Who is reporting")
-    ] = None,
+    reported_by: Annotated[str | None, typer.Option("--by", help="Who is reporting")] = None,
 ) -> None:
     """Report an item as out of stock at a store."""
     try:
@@ -546,12 +595,8 @@ def oos_report(
 
 @oos_app.command("list")
 def oos_list(
-    item: Annotated[
-        str | None, typer.Option("--item", "-i", help="Filter by item name")
-    ] = None,
-    store: Annotated[
-        str | None, typer.Option("--store", "-s", help="Filter by store")
-    ] = None,
+    item: Annotated[str | None, typer.Option("--item", "-i", help="Filter by item name")] = None,
+    store: Annotated[str | None, typer.Option("--store", "-s", help="Filter by store")] = None,
 ) -> None:
     """List out-of-stock records."""
     try:
@@ -923,12 +968,8 @@ def prefs_set(
     dietary: Annotated[
         list[str] | None, typer.Option("--dietary", help="Dietary restriction")
     ] = None,
-    allergen: Annotated[
-        list[str] | None, typer.Option("--allergen", help="Allergen")
-    ] = None,
-    favorite: Annotated[
-        list[str] | None, typer.Option("--favorite", help="Favorite item")
-    ] = None,
+    allergen: Annotated[list[str] | None, typer.Option("--allergen", help="Allergen")] = None,
+    favorite: Annotated[list[str] | None, typer.Option("--favorite", help="Favorite item")] = None,
 ) -> None:
     """Set user preferences."""
     try:

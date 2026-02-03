@@ -311,28 +311,28 @@ class SQLiteStore:
             last_updated = datetime.fromisoformat(last_updated_str)
 
             # Load items
-            rows = conn.execute(
-                "SELECT * FROM grocery_items ORDER BY added_at DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM grocery_items ORDER BY added_at DESC").fetchall()
 
             items = []
             for row in rows:
-                items.append(GroceryItem(
-                    id=UUID(row["id"]),
-                    name=row["name"],
-                    quantity=self._parse_quantity(row["quantity"]),
-                    unit=row["unit"],
-                    category=row["category"],
-                    store=row["store"],
-                    aisle=row["aisle"],
-                    brand_preference=row["brand_preference"],
-                    estimated_price=row["estimated_price"],
-                    priority=Priority(row["priority"]),
-                    added_by=row["added_by"],
-                    added_at=datetime.fromisoformat(row["added_at"]),
-                    notes=row["notes"],
-                    status=ItemStatus(row["status"]),
-                ))
+                items.append(
+                    GroceryItem(
+                        id=UUID(row["id"]),
+                        name=row["name"],
+                        quantity=self._parse_quantity(row["quantity"]),
+                        unit=row["unit"],
+                        category=row["category"],
+                        store=row["store"],
+                        aisle=row["aisle"],
+                        brand_preference=row["brand_preference"],
+                        estimated_price=row["estimated_price"],
+                        priority=Priority(row["priority"]),
+                        added_by=row["added_by"],
+                        added_at=datetime.fromisoformat(row["added_at"]),
+                        notes=row["notes"],
+                        status=ItemStatus(row["status"]),
+                    )
+                )
 
             return GroceryList(
                 version=version,
@@ -376,8 +376,7 @@ class SQLiteStore:
 
             # Get existing item IDs
             existing_ids = {
-                row["id"] for row in
-                conn.execute("SELECT id FROM grocery_items").fetchall()
+                row["id"] for row in conn.execute("SELECT id FROM grocery_items").fetchall()
             }
 
             # Get new item IDs
@@ -549,7 +548,8 @@ class SQLiteStore:
                     unit_price=item_row["unit_price"],
                     total_price=item_row["total_price"],
                     matched_list_item_id=UUID(item_row["matched_list_item_id"])
-                    if item_row["matched_list_item_id"] else None,
+                    if item_row["matched_list_item_id"]
+                    else None,
                 )
                 for item_row in item_rows
             ]
@@ -560,7 +560,8 @@ class SQLiteStore:
                 store_location=row["store_location"],
                 transaction_date=date.fromisoformat(row["transaction_date"]),
                 transaction_time=time.fromisoformat(row["transaction_time"])
-                if row["transaction_time"] else None,
+                if row["transaction_time"]
+                else None,
                 purchased_by=row["purchased_by"],
                 line_items=line_items,
                 subtotal=row["subtotal"],
@@ -579,9 +580,7 @@ class SQLiteStore:
             List of all receipts sorted by transaction date (most recent first)
         """
         with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT id FROM receipts ORDER BY transaction_date DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT id FROM receipts ORDER BY transaction_date DESC").fetchall()
 
             receipts = []
             for row in rows:
@@ -600,9 +599,7 @@ class SQLiteStore:
             Dict mapping item_name -> store -> PriceHistory
         """
         with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM price_history ORDER BY date"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM price_history ORDER BY date").fetchall()
 
             result: dict[str, dict[str, PriceHistory]] = {}
             for row in rows:
@@ -922,9 +919,7 @@ class SQLiteStore:
             List of OutOfStockRecord
         """
         with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM out_of_stock ORDER BY recorded_date DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM out_of_stock ORDER BY recorded_date DESC").fetchall()
 
             return [
                 OutOfStockRecord(
@@ -1047,9 +1042,7 @@ class SQLiteStore:
             List of InventoryItem
         """
         with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM inventory ORDER BY item_name"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM inventory ORDER BY item_name").fetchall()
 
             return [
                 InventoryItem(
@@ -1060,9 +1053,11 @@ class SQLiteStore:
                     unit=row["unit"],
                     location=InventoryLocation(row["location"]),
                     expiration_date=date.fromisoformat(row["expiration_date"])
-                    if row["expiration_date"] else None,
+                    if row["expiration_date"]
+                    else None,
                     opened_date=date.fromisoformat(row["opened_date"])
-                    if row["opened_date"] else None,
+                    if row["opened_date"]
+                    else None,
                     low_stock_threshold=row["low_stock_threshold"],
                     purchased_date=date.fromisoformat(row["purchased_date"]),
                     receipt_id=UUID(row["receipt_id"]) if row["receipt_id"] else None,
@@ -1126,7 +1121,8 @@ class SQLiteStore:
                     quantity=row["quantity"],
                     unit=row["unit"],
                     original_purchase_date=date.fromisoformat(row["original_purchase_date"])
-                    if row["original_purchase_date"] else None,
+                    if row["original_purchase_date"]
+                    else None,
                     waste_logged_date=date.fromisoformat(row["waste_logged_date"]),
                     reason=WasteReason(row["reason"]),
                     estimated_cost=row["estimated_cost"],
@@ -1160,7 +1156,8 @@ class SQLiteStore:
                         record.quantity,
                         record.unit,
                         record.original_purchase_date.isoformat()
-                        if record.original_purchase_date else None,
+                        if record.original_purchase_date
+                        else None,
                         record.waste_logged_date.isoformat(),
                         record.reason.value,
                         record.estimated_cost,
@@ -1191,7 +1188,8 @@ class SQLiteStore:
                     record.quantity,
                     record.unit,
                     record.original_purchase_date.isoformat()
-                    if record.original_purchase_date else None,
+                    if record.original_purchase_date
+                    else None,
                     record.waste_logged_date.isoformat(),
                     record.reason.value,
                     record.estimated_cost,
