@@ -5,6 +5,14 @@ All notable changes to Grocery Tracker will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-03
+
+### Added
+- Coupon/sale tracking with deal lifecycle (add, list, redeem)
+- Savings tracker with manual logging and summary analytics
+- JSON + SQLite persistence for deals and savings records
+- Rich/JSON output rendering for deals and savings
+
 ## [1.0.0] - 2026-01-30
 
 ### Added

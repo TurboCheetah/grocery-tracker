@@ -8,6 +8,7 @@ Intelligent grocery list and inventory management for households.
 - **Receipt Processing**: Process receipt data to reconcile with your shopping list
 - **Price Tracking**: Track price history across stores over time
 - **Multi-user Support**: Track who added what and personal preferences
+- **Deals & Savings**: Track coupons/sales and savings over time
 - **JSON Output**: Programmatic access via `--json` flag for LLM integration
 
 ## Installation
@@ -70,6 +71,41 @@ grocery receipt process --data '{"store_name": "Giant", "transaction_date": "202
 ```bash
 grocery price history "Milk"
 grocery price history "Milk" --store Giant
+```
+
+### Deals (Coupons/Sales)
+
+```bash
+# Add a sale
+grocery deals add "Eggs" --store Giant --type sale --regular-price 3.99 --deal-price 2.99 --start 2026-02-01 --end 2026-02-07
+
+# Add a coupon
+grocery deals add "Cereal" --store Giant --type coupon --discount 1.00 --code SAVE1
+
+# List active deals
+grocery deals list
+
+# List all deals
+grocery deals list --status all
+
+# Redeem a deal (logs savings)
+grocery deals redeem <deal-id> --quantity 2
+```
+
+### Savings
+
+```bash
+# Log savings directly
+grocery savings log "Milk" --store Giant --amount 1.50 --type coupon
+
+# Log savings based on regular vs paid price
+grocery savings log "Eggs" --regular-price 3.99 --paid-price 2.99 --quantity 2
+
+# List savings records
+grocery savings list
+
+# Summary by period
+grocery savings summary --period monthly
 ```
 
 ## Configuration

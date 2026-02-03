@@ -167,7 +167,7 @@ class Item(BaseModel):
     brand_preference: str | None
     estimated_price: float | None
     priority: str  # high, medium, low
-    added_by: str  # Alice, Bob
+    added_by: str  # Francisco, Loki
     added_at: str  # ISO8601
     notes: str | None
     status: str  # to_buy, bought, still_needed
@@ -232,11 +232,11 @@ category = "Other"
 [budget]
 monthly_limit = 500.00
 
-[users.alice]
+[users.francisco]
 dietary_restrictions = []
 favorite_stores = ["Giant", "Trader Joe's"]
 
-[users.bob]
+[users.loki]
 dietary_restrictions = ["vegetarian"]
 ```
 

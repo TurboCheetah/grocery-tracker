@@ -46,7 +46,7 @@ class TestAddCommand:
                 "--priority",
                 "high",
                 "--by",
-                "Alice",
+                "Francisco",
                 "--notes",
                 "Whole milk only",
             ],

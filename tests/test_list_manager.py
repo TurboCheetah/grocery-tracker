@@ -32,7 +32,7 @@ class TestAddItem:
             brand_preference="Horizon",
             estimated_price=5.99,
             priority=Priority.HIGH,
-            added_by="Alice",
+            added_by="Francisco",
             notes="Whole milk",
         )
         item = result["data"]["item"]

@@ -8,6 +8,8 @@ from grocery_tracker.models import (
     Category,
     CategoryBudget,
     CategorySpending,
+    Deal,
+    DealType,
     FrequencyData,
     GroceryItem,
     GroceryList,
@@ -22,6 +24,9 @@ from grocery_tracker.models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    SavingsRecord,
+    SavingsSummary,
+    SavingsType,
     SpendingSummary,
     Suggestion,
     WasteReason,
@@ -54,7 +59,7 @@ class TestGroceryItem:
             brand_preference="Horizon",
             estimated_price=5.99,
             priority=Priority.HIGH,
-            added_by="Alice",
+            added_by="Francisco",
             notes="Whole milk only",
         )
         assert item.name == "Organic Milk"
@@ -291,10 +296,10 @@ class TestOutOfStockRecord:
             item_name="Oat Milk",
             store="Giant",
             substitution="Almond Milk",
-            reported_by="Alice",
+            reported_by="Francisco",
         )
         assert record.substitution == "Almond Milk"
-        assert record.reported_by == "Alice"
+        assert record.reported_by == "Francisco"
 
 
 class TestCategorySpending:
@@ -486,10 +491,10 @@ class TestWasteRecord:
             reason=WasteReason.OVERRIPE,
             estimated_cost=2.97,
             original_purchase_date=date.today() - timedelta(days=5),
-            logged_by="Alice",
+            logged_by="Francisco",
         )
         assert record.estimated_cost == 2.97
-        assert record.logged_by == "Alice"
+        assert record.logged_by == "Francisco"
 
 
 class TestCategoryBudget:
@@ -547,3 +552,109 @@ class TestBudgetTracking:
             ],
         )
         assert len(bt.category_budgets) == 2
+
+
+class TestDealType:
+    """Tests for DealType enum."""
+
+    def test_values(self):
+        assert DealType.COUPON.value == "coupon"
+        assert DealType.SALE.value == "sale"
+
+
+class TestSavingsType:
+    """Tests for SavingsType enum."""
+
+    def test_values(self):
+        assert SavingsType.COUPON.value == "coupon"
+        assert SavingsType.SALE.value == "sale"
+        assert SavingsType.MANUAL.value == "manual"
+
+
+class TestDeal:
+    """Tests for Deal model."""
+
+    def test_create_minimal(self):
+        deal = Deal(item_name="Eggs", store="Giant")
+        assert deal.item_name == "Eggs"
+        assert deal.store == "Giant"
+        assert deal.deal_type == DealType.SALE
+
+    def test_savings_per_unit_from_prices(self):
+        deal = Deal(
+            item_name="Eggs",
+            store="Giant",
+            regular_price=3.99,
+            deal_price=2.99,
+        )
+        assert deal.savings_per_unit == 1.00
+
+    def test_savings_per_unit_from_percent(self):
+        deal = Deal(
+            item_name="Milk",
+            store="Giant",
+            regular_price=5.00,
+            discount_percent=10,
+        )
+        assert deal.savings_per_unit == 0.50
+
+    def test_active_status(self):
+        today = date.today()
+        active = Deal(
+            item_name="Bread",
+            store="Giant",
+            start_date=today - timedelta(days=1),
+            end_date=today + timedelta(days=1),
+        )
+        assert active.is_active is True
+        assert active.is_expired is False
+
+        expired = Deal(
+            item_name="Bread",
+            store="Giant",
+            end_date=today - timedelta(days=1),
+        )
+        assert expired.is_active is False
+        assert expired.is_expired is True
+
+
+class TestSavingsRecord:
+    """Tests for SavingsRecord model."""
+
+    def test_create_minimal(self):
+        record = SavingsRecord(item_name="Eggs", store="Giant", savings_amount=1.50)
+        assert record.item_name == "Eggs"
+        assert record.store == "Giant"
+        assert record.savings_type == SavingsType.MANUAL
+
+    def test_create_full(self):
+        record = SavingsRecord(
+            item_name="Milk",
+            store="Giant",
+            savings_amount=2.00,
+            regular_price=5.00,
+            paid_price=3.00,
+            quantity=1,
+            savings_type=SavingsType.SALE,
+        )
+        assert record.savings_amount == 2.00
+        assert record.savings_type == SavingsType.SALE
+
+
+class TestSavingsSummary:
+    """Tests for SavingsSummary model."""
+
+    def test_create(self):
+        summary = SavingsSummary(
+            period="monthly",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 31),
+            total_savings=12.0,
+            savings_count=3,
+            average_savings=4.0,
+            by_type={"sale": 8.0, "coupon": 4.0},
+            by_store={"Giant": 12.0},
+            top_items=[{"item": "Eggs", "total": 5.0}],
+        )
+        assert summary.total_savings == 12.0
+        assert summary.savings_count == 3

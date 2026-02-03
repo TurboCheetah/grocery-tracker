@@ -299,12 +299,12 @@ class TestOutOfStock:
             item_name="Oat Milk",
             store="Giant",
             substitution="Almond Milk",
-            reported_by="Alice",
+            reported_by="Francisco",
         )
         assert record.item_name == "Oat Milk"
         assert record.store == "Giant"
         assert record.substitution == "Almond Milk"
-        assert record.reported_by == "Alice"
+        assert record.reported_by == "Francisco"
 
     def test_record_without_substitution(self, analytics):
         """Can record out of stock without substitution."""

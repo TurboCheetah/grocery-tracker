@@ -103,6 +103,12 @@ class OutputFormatter:
             self._render_waste_summary(data)
         elif "budget_status" in data.get("data", {}):
             self._render_budget_status(data)
+        elif "deals" in data.get("data", {}):
+            self._render_deals(data)
+        elif "savings" in data.get("data", {}):
+            self._render_savings(data)
+        elif "savings_summary" in data.get("data", {}):
+            self._render_savings_summary(data)
         elif "preferences" in data.get("data", {}):
             self._render_preferences(data)
 
@@ -659,6 +665,135 @@ Total: ${receipt["total"]:.2f}""",
                     f"[{cb_color}]${cb_remaining:.2f}[/{cb_color}]",
                 )
             self.console.print(table)
+
+    def _render_deals(self, data: dict) -> None:
+        """Render coupon/sale deals."""
+        deals = data["data"]["deals"]
+
+        if not deals:
+            self.console.print("[dim]No deals tracked[/dim]")
+            return
+
+        table = Table(title="Deals", show_header=True, header_style="bold cyan")
+        table.add_column("Item", style="cyan")
+        table.add_column("Store", style="green")
+        table.add_column("Type", style="yellow")
+        table.add_column("Regular", justify="right")
+        table.add_column("Deal", justify="right")
+        table.add_column("Savings", justify="right", style="green")
+        table.add_column("Status")
+        table.add_column("Valid")
+
+        today = date.today()
+
+        for deal in deals:
+            regular = deal.get("regular_price")
+            deal_price = deal.get("deal_price")
+            discount_amount = deal.get("discount_amount")
+            discount_percent = deal.get("discount_percent")
+            savings_per_unit = deal.get("savings_per_unit")
+
+            if savings_per_unit is None:
+                if regular is not None and deal_price is not None:
+                    savings_per_unit = max(regular - deal_price, 0.0)
+                elif discount_amount is not None:
+                    savings_per_unit = discount_amount
+                elif discount_percent is not None and regular is not None:
+                    savings_per_unit = regular * (discount_percent / 100.0)
+
+            status = deal.get("status")
+            if not status:
+                if deal.get("redeemed"):
+                    status = "redeemed"
+                else:
+                    end_date = deal.get("end_date")
+                    start_date = deal.get("start_date")
+                    if end_date:
+                        try:
+                            end_dt = date.fromisoformat(str(end_date))
+                            if end_dt < today:
+                                status = "expired"
+                        except ValueError:
+                            status = "active"
+                    if not status and start_date:
+                        try:
+                            start_dt = date.fromisoformat(str(start_date))
+                            if start_dt > today:
+                                status = "upcoming"
+                        except ValueError:
+                            status = "active"
+                    if not status:
+                        status = "active"
+
+            start = deal.get("start_date") or "-"
+            end = deal.get("end_date") or "-"
+            valid = f"{start} to {end}" if start != "-" or end != "-" else "-"
+
+            table.add_row(
+                deal.get("item_name", ""),
+                deal.get("store", ""),
+                str(deal.get("deal_type", "")),
+                f"${regular:.2f}" if regular is not None else "-",
+                f"${deal_price:.2f}" if deal_price is not None else "-",
+                f"${savings_per_unit:.2f}" if savings_per_unit is not None else "-",
+                status,
+                valid,
+            )
+
+        self.console.print(table)
+
+    def _render_savings(self, data: dict) -> None:
+        """Render savings records."""
+        records = data["data"]["savings"]
+        if isinstance(records, dict):
+            records = [records]
+
+        if not records:
+            self.console.print("[dim]No savings records[/dim]")
+            return
+
+        table = Table(title="Savings Records", show_header=True, header_style="bold cyan")
+        table.add_column("Date")
+        table.add_column("Item", style="cyan")
+        table.add_column("Store", style="green")
+        table.add_column("Type", style="yellow")
+        table.add_column("Savings", justify="right", style="green")
+
+        for record in records:
+            table.add_row(
+                str(record.get("date", "")),
+                record.get("item_name", ""),
+                record.get("store") or "-",
+                str(record.get("savings_type", "")),
+                f"${record.get('savings_amount', 0.0):.2f}",
+            )
+
+        self.console.print(table)
+
+    def _render_savings_summary(self, data: dict) -> None:
+        """Render savings summary."""
+        summary = data["data"]["savings_summary"]
+
+        self.console.print(f"\n[bold]Savings Summary ({summary['period']})[/bold]")
+        self.console.print(f"Period: {summary['start_date']} to {summary['end_date']}")
+        self.console.print(f"Total saved: ${summary['total_savings']:.2f}")
+        self.console.print(f"Records: {summary['savings_count']}")
+        self.console.print(f"Average savings: ${summary['average_savings']:.2f}")
+
+        if summary.get("by_type"):
+            self.console.print("\n[dim]By type:[/dim]")
+            for key, value in summary["by_type"].items():
+                self.console.print(f"  {key}: ${value:.2f}")
+
+        if summary.get("by_store"):
+            self.console.print("\n[dim]By store:[/dim]")
+            for key, value in summary["by_store"].items():
+                self.console.print(f"  {key}: ${value:.2f}")
+
+        if summary.get("top_items"):
+            self.console.print("\n[dim]Top items:[/dim]")
+            for item in summary["top_items"]:
+                self.console.print(f"  {item.get('item')}: ${item.get('total', 0.0):.2f}")
 
     def _render_preferences(self, data: dict) -> None:
         """Render user preferences."""

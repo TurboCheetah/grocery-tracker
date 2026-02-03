@@ -7,6 +7,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+DateType = date
+
 
 class Priority(str, Enum):
     """Item priority levels."""
@@ -432,3 +434,100 @@ class BudgetTracking(BaseModel):
         if self.monthly_limit <= 0:
             return 0.0
         return round(self.total_spent / self.monthly_limit * 100, 1)
+
+
+class DealType(str, Enum):
+    """Types of deals for coupons or sales."""
+
+    COUPON = "coupon"
+    SALE = "sale"
+
+
+class SavingsType(str, Enum):
+    """Sources of savings."""
+
+    COUPON = "coupon"
+    SALE = "sale"
+    MANUAL = "manual"
+
+
+class Deal(BaseModel):
+    """A coupon or sale deal."""
+
+    id: UUID = Field(default_factory=uuid4)
+    item_name: str
+    store: str
+    deal_type: DealType = DealType.SALE
+    regular_price: float | None = None
+    deal_price: float | None = None
+    discount_amount: float | None = None
+    discount_percent: float | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    coupon_code: str | None = None
+    source: str | None = None
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=datetime.now)
+    redeemed: bool = False
+    redeemed_date: date | None = None
+
+    @property
+    def savings_per_unit(self) -> float | None:
+        """Estimate savings per unit based on deal details."""
+        if self.regular_price is not None and self.deal_price is not None:
+            return round(max(self.regular_price - self.deal_price, 0.0), 2)
+        if self.discount_amount is not None:
+            return round(max(self.discount_amount, 0.0), 2)
+        if self.discount_percent is not None and self.regular_price is not None:
+            savings = self.regular_price * (self.discount_percent / 100.0)
+            return round(max(savings, 0.0), 2)
+        return None
+
+    @property
+    def is_active(self) -> bool:
+        """Whether the deal is currently active (and not redeemed)."""
+        if self.redeemed:
+            return False
+        today = date.today()
+        if self.start_date and today < self.start_date:
+            return False
+        if self.end_date and today > self.end_date:
+            return False
+        return True
+
+    @property
+    def is_expired(self) -> bool:
+        """Whether the deal has expired."""
+        if self.end_date is None:
+            return False
+        return date.today() > self.end_date
+
+
+class SavingsRecord(BaseModel):
+    """Record of savings from a coupon or sale."""
+
+    id: UUID = Field(default_factory=uuid4)
+    item_name: str
+    store: str | None = None
+    savings_amount: float
+    regular_price: float | None = None
+    paid_price: float | None = None
+    quantity: float = 1.0
+    savings_type: SavingsType = SavingsType.MANUAL
+    date: DateType = Field(default_factory=DateType.today)
+    deal_id: UUID | None = None
+    notes: str | None = None
+
+
+class SavingsSummary(BaseModel):
+    """Summary of savings over a period."""
+
+    period: str
+    start_date: date
+    end_date: date
+    total_savings: float
+    savings_count: int
+    average_savings: float
+    by_type: dict[str, float] = Field(default_factory=dict)
+    by_store: dict[str, float] = Field(default_factory=dict)
+    top_items: list[dict[str, Any]] = Field(default_factory=list)

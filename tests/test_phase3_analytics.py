@@ -6,6 +6,10 @@ import pytest
 
 from grocery_tracker.analytics import Analytics
 from grocery_tracker.models import (
+    BudgetTracking,
+    CategoryBudget,
+    DealType,
+    SavingsType,
     WasteReason,
     WasteRecord,
 )
@@ -35,11 +39,11 @@ class TestLogWaste:
             reason=WasteReason.OVERRIPE,
             estimated_cost=2.97,
             original_purchase_date=date.today() - timedelta(days=5),
-            logged_by="Alice",
+            logged_by="Francisco",
         )
         assert record.quantity == 3.0
         assert record.estimated_cost == 2.97
-        assert record.logged_by == "Alice"
+        assert record.logged_by == "Francisco"
 
     def test_log_persists(self, analytics, data_store):
         """Logged waste records persist."""
@@ -179,3 +183,60 @@ class TestBudgetTracking:
         retrieved = analytics.get_budget_status(month="2026-02")
         assert retrieved is not None
         assert retrieved.monthly_limit == 600.0
+
+
+class TestDealsAndSavings:
+    """Tests for deal redemption and savings tracking."""
+
+    def test_add_and_redeem_deal(self, analytics, data_store):
+        """Redeeming a deal logs savings and updates deal."""
+        deal = analytics.add_deal(
+            item_name="Eggs",
+            store="Giant",
+            deal_type=DealType.SALE,
+            regular_price=3.99,
+            deal_price=2.99,
+        )
+
+        updated, record = analytics.redeem_deal(str(deal.id), quantity=2)
+
+        assert updated.redeemed is True
+        assert record.savings_amount == 2.00
+
+        stored = data_store.get_deal(deal.id)
+        assert stored is not None
+        assert stored.redeemed is True
+
+    def test_log_savings(self, analytics, data_store):
+        """Manual savings log persists."""
+        record = analytics.log_savings(
+            item_name="Milk",
+            store="Giant",
+            savings_amount=1.50,
+            savings_type=SavingsType.COUPON,
+        )
+        assert record.savings_amount == 1.50
+
+        records = data_store.load_savings()
+        assert len(records) == 1
+        assert records[0].item_name == "Milk"
+
+    def test_savings_summary(self, analytics):
+        """Savings summary aggregates totals."""
+        analytics.log_savings(
+            item_name="Milk",
+            store="Giant",
+            savings_amount=2.00,
+            savings_type=SavingsType.SALE,
+        )
+        analytics.log_savings(
+            item_name="Eggs",
+            store="Giant",
+            savings_amount=1.00,
+            savings_type=SavingsType.COUPON,
+        )
+
+        summary = analytics.savings_summary(period="monthly")
+        assert summary.total_savings == 3.00
+        assert summary.savings_count == 2
+        assert summary.by_type["sale"] == 2.00

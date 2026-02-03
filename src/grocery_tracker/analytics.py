@@ -11,10 +11,15 @@ from .models import (
     BulkBuyingRecommendation,
     CategoryBudget,
     CategorySpending,
+    Deal,
+    DealType,
     FrequencyData,
     OutOfStockRecord,
     PriceComparison,
     PriceHistory,
+    SavingsRecord,
+    SavingsSummary,
+    SavingsType,
     SeasonalMonth,
     SeasonalPattern,
     SpendingSummary,
@@ -861,3 +866,180 @@ class Analytics:
 
         self.data_store.save_budget(budget)
         return budget
+
+    # --- Deals & Savings Tracking ---
+
+    def add_deal(
+        self,
+        item_name: str,
+        store: str,
+        deal_type: DealType = DealType.SALE,
+        regular_price: float | None = None,
+        deal_price: float | None = None,
+        discount_amount: float | None = None,
+        discount_percent: float | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        coupon_code: str | None = None,
+        source: str | None = None,
+        notes: str | None = None,
+    ) -> Deal:
+        """Create and store a coupon/sale deal."""
+        deal = Deal(
+            item_name=item_name,
+            store=store,
+            deal_type=deal_type,
+            regular_price=regular_price,
+            deal_price=deal_price,
+            discount_amount=discount_amount,
+            discount_percent=discount_percent,
+            start_date=start_date,
+            end_date=end_date,
+            coupon_code=coupon_code,
+            source=source,
+            notes=notes,
+        )
+        self.data_store.add_deal(deal)
+        return deal
+
+    def redeem_deal(
+        self,
+        deal_id: str,
+        quantity: float = 1.0,
+        redeemed_date: date | None = None,
+        savings_override: float | None = None,
+        regular_price: float | None = None,
+        paid_price: float | None = None,
+        notes: str | None = None,
+    ) -> tuple[Deal, SavingsRecord]:
+        """Redeem a deal and record savings."""
+        deal = self.data_store.get_deal(deal_id)
+        if deal is None:
+            raise ValueError(f"Deal not found: {deal_id}")
+        if deal.redeemed:
+            raise ValueError(f"Deal already redeemed: {deal_id}")
+
+        redeem_date = redeemed_date or date.today()
+
+        if savings_override is not None:
+            total_savings = savings_override
+        else:
+            effective_regular = regular_price if regular_price is not None else deal.regular_price
+            effective_paid = paid_price if paid_price is not None else deal.deal_price
+
+            savings_per_unit = None
+            if effective_regular is not None and effective_paid is not None:
+                savings_per_unit = effective_regular - effective_paid
+            else:
+                savings_per_unit = deal.savings_per_unit
+
+            if savings_per_unit is None:
+                raise ValueError(
+                    "Unable to determine savings; provide --savings or both regular and "
+                    "paid prices."
+                )
+
+            total_savings = savings_per_unit * quantity
+            regular_price = effective_regular
+            paid_price = effective_paid
+
+        total_savings = round(max(total_savings, 0.0), 2)
+
+        savings_record = SavingsRecord(
+            item_name=deal.item_name,
+            store=deal.store,
+            savings_amount=total_savings,
+            regular_price=regular_price,
+            paid_price=paid_price,
+            quantity=quantity,
+            savings_type=SavingsType(deal.deal_type.value),
+            date=redeem_date,
+            deal_id=deal.id,
+            notes=notes,
+        )
+
+        deal.redeemed = True
+        deal.redeemed_date = redeem_date
+        self.data_store.update_deal(deal)
+        self.data_store.add_savings(savings_record)
+
+        return deal, savings_record
+
+    def log_savings(
+        self,
+        item_name: str,
+        store: str | None,
+        savings_amount: float | None = None,
+        regular_price: float | None = None,
+        paid_price: float | None = None,
+        quantity: float = 1.0,
+        savings_type: SavingsType = SavingsType.MANUAL,
+        record_date: date | None = None,
+        notes: str | None = None,
+    ) -> SavingsRecord:
+        """Log a savings record manually."""
+        if savings_amount is None:
+            if regular_price is None or paid_price is None:
+                raise ValueError("Provide savings amount or both regular and paid prices.")
+            savings_amount = (regular_price - paid_price) * quantity
+
+        savings_amount = round(max(savings_amount, 0.0), 2)
+
+        record = SavingsRecord(
+            item_name=item_name,
+            store=store,
+            savings_amount=savings_amount,
+            regular_price=regular_price,
+            paid_price=paid_price,
+            quantity=quantity,
+            savings_type=savings_type,
+            date=record_date or date.today(),
+            notes=notes,
+        )
+        self.data_store.add_savings(record)
+        return record
+
+    def savings_summary(self, period: str = "monthly") -> SavingsSummary:
+        """Summarize savings over a time period."""
+        today = date.today()
+
+        if period == "weekly":
+            start_date = today - timedelta(days=today.weekday())
+        elif period == "yearly":
+            start_date = today.replace(month=1, day=1)
+        else:
+            start_date = today.replace(day=1)
+
+        records = self.data_store.load_savings()
+        period_records = [r for r in records if start_date <= r.date <= today]
+
+        total_savings = sum(r.savings_amount for r in period_records)
+        savings_count = len(period_records)
+        average_savings = round(total_savings / savings_count, 2) if savings_count else 0.0
+
+        by_type: dict[str, float] = defaultdict(float)
+        by_store: dict[str, float] = defaultdict(float)
+        item_totals: dict[str, float] = defaultdict(float)
+
+        for record in period_records:
+            by_type[record.savings_type.value] += record.savings_amount
+            if record.store:
+                by_store[record.store] += record.savings_amount
+            item_totals[record.item_name] += record.savings_amount
+
+        top_items = [
+            {"item": item, "total": round(total, 2)}
+            for item, total in sorted(item_totals.items(), key=lambda x: x[1], reverse=True)[:5]
+        ]
+
+        return SavingsSummary(
+            period=period,
+            start_date=start_date,
+            end_date=today,
+            total_savings=round(total_savings, 2),
+            savings_count=savings_count,
+            average_savings=average_savings,
+            by_type={k: round(v, 2) for k, v in by_type.items()},
+            by_store={k: round(v, 2) for k, v in by_store.items()},
+            top_items=top_items,
+        )

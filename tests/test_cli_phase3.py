@@ -64,7 +64,7 @@ class TestInventoryAdd:
                 "--threshold",
                 "2",
                 "--by",
-                "Alice",
+                "Francisco",
             ],
         )
         assert result.exit_code == 0
@@ -356,7 +356,7 @@ class TestWasteLog:
                 "--cost",
                 "3.99",
                 "--by",
-                "Bob",
+                "Loki",
             ],
         )
         assert result.exit_code == 0
@@ -524,6 +524,253 @@ class TestBudgetStatus:
         assert result.exit_code == 0
 
 
+# --- Deals Commands ---
+
+
+class TestDealsAdd:
+    """Tests for deals add command."""
+
+    def test_add_deal(self, cli_data_dir):
+        """Add a deal with pricing."""
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "deals",
+                "add",
+                "Eggs",
+                "--store",
+                "Giant",
+                "--type",
+                "sale",
+                "--regular-price",
+                "3.99",
+                "--deal-price",
+                "2.99",
+            ],
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["data"]["deal"]["item_name"] == "Eggs"
+        assert output["data"]["deal"]["store"] == "Giant"
+
+    def test_add_rich_mode(self, cli_data_dir):
+        """Add deal in Rich mode."""
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(cli_data_dir), "deals", "add", "Milk", "--store", "Giant"],
+        )
+        assert result.exit_code == 0
+
+
+class TestDealsList:
+    """Tests for deals list command."""
+
+    def test_list_deals(self, cli_data_dir):
+        """List deals after adding one."""
+        runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "deals",
+                "add",
+                "Eggs",
+                "--store",
+                "Giant",
+            ],
+        )
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "deals", "list", "--status", "all"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["data"]["count"] == 1
+
+    def test_upcoming_excludes_redeemed(self, cli_data_dir):
+        """Upcoming filter should exclude redeemed deals."""
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        later = (date.today() + timedelta(days=5)).isoformat()
+
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "deals",
+                "add",
+                "Eggs",
+                "--store",
+                "Giant",
+                "--regular-price",
+                "3.99",
+                "--deal-price",
+                "2.99",
+                "--start",
+                tomorrow,
+                "--end",
+                later,
+            ],
+        )
+        deal_id = json.loads(result.stdout)["data"]["deal"]["id"]
+
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "deals",
+                "redeem",
+                deal_id,
+            ],
+        )
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "deals",
+                "list",
+                "--status",
+                "upcoming",
+            ],
+        )
+        output = json.loads(result.stdout)
+        assert output["data"]["count"] == 0
+
+
+class TestDealsRedeem:
+    """Tests for deals redeem command."""
+
+    def test_redeem_deal(self, cli_data_dir):
+        """Redeem a deal and log savings."""
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "deals",
+                "add",
+                "Eggs",
+                "--store",
+                "Giant",
+                "--regular-price",
+                "3.99",
+                "--deal-price",
+                "2.99",
+            ],
+        )
+        deal_id = json.loads(result.stdout)["data"]["deal"]["id"]
+
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "deals",
+                "redeem",
+                deal_id,
+                "--quantity",
+                "2",
+            ],
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["data"]["savings"]["savings_amount"] == 2.0
+
+
+# --- Savings Commands ---
+
+
+class TestSavingsLog:
+    """Tests for savings log command."""
+
+    def test_log_savings(self, cli_data_dir):
+        """Log a savings record."""
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "savings",
+                "log",
+                "Milk",
+                "--store",
+                "Giant",
+                "--amount",
+                "1.50",
+                "--type",
+                "coupon",
+            ],
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["data"]["savings"]["savings_amount"] == 1.50
+
+    def test_log_rich_mode(self, cli_data_dir):
+        """Log savings in Rich mode."""
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(cli_data_dir), "savings", "log", "Eggs", "--amount", "1.00"],
+        )
+        assert result.exit_code == 0
+
+
+class TestSavingsSummary:
+    """Tests for savings summary command."""
+
+    def test_summary(self, cli_data_dir):
+        """Summary reflects logged savings."""
+        runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "savings",
+                "log",
+                "Milk",
+                "--store",
+                "Giant",
+                "--amount",
+                "2.00",
+            ],
+        )
+        runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "savings",
+                "log",
+                "Eggs",
+                "--store",
+                "Giant",
+                "--amount",
+                "1.00",
+            ],
+        )
+
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "savings", "summary"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["data"]["savings_summary"]["total_savings"] == 3.0
+
+
 # --- Preferences Commands ---
 
 
@@ -533,7 +780,8 @@ class TestPreferencesView:
     def test_view_no_prefs(self, cli_data_dir):
         """View with no preferences set."""
         result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Alice"]
+            app,
+            ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Francisco"],
         )
         assert result.exit_code == 0  # warns, doesn't fail
 
@@ -547,17 +795,17 @@ class TestPreferencesView:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Alice",
+                "Francisco",
                 "--favorite",
                 "mango",
             ],
         )
         result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Alice"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Francisco"]
         )
         assert result.exit_code == 0
         output = json.loads(result.stdout)
-        assert output["data"]["preferences"]["user"] == "Alice"
+        assert output["data"]["preferences"]["user"] == "Francisco"
         assert "mango" in output["data"]["preferences"]["favorite_items"]
 
     def test_view_rich_mode(self, cli_data_dir):
@@ -569,13 +817,14 @@ class TestPreferencesView:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Alice",
+                "Francisco",
                 "--favorite",
                 "mango",
             ],
         )
         result = runner.invoke(
-            app, ["--data-dir", str(cli_data_dir), "preferences", "view", "Alice"]
+            app,
+            ["--data-dir", str(cli_data_dir), "preferences", "view", "Francisco"],
         )
         assert result.exit_code == 0
 
@@ -593,7 +842,7 @@ class TestPreferencesSet:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Alice",
+                "Francisco",
                 "--brand",
                 "milk:Organic Valley",
             ],
@@ -612,7 +861,7 @@ class TestPreferencesSet:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Bob",
+                "Loki",
                 "--dietary",
                 "vegetarian",
             ],
@@ -631,7 +880,7 @@ class TestPreferencesSet:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Alice",
+                "Francisco",
                 "--allergen",
                 "peanuts",
             ],
@@ -650,7 +899,7 @@ class TestPreferencesSet:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Alice",
+                "Francisco",
                 "--favorite",
                 "mango",
                 "--favorite",
@@ -672,7 +921,7 @@ class TestPreferencesSet:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Alice",
+                "Francisco",
                 "--favorite",
                 "mango",
             ],
@@ -689,7 +938,7 @@ class TestPreferencesSet:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Alice",
+                "Francisco",
                 "--favorite",
                 "mango",
             ],
@@ -702,14 +951,14 @@ class TestPreferencesSet:
                 str(cli_data_dir),
                 "preferences",
                 "set",
-                "Alice",
+                "Francisco",
                 "--dietary",
                 "vegetarian",
             ],
         )
 
         result = runner.invoke(
-            app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Alice"]
+            app, ["--json", "--data-dir", str(cli_data_dir), "preferences", "view", "Francisco"]
         )
         output = json.loads(result.stdout)
         assert "mango" in output["data"]["preferences"]["favorite_items"]

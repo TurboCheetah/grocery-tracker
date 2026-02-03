@@ -14,6 +14,7 @@ from uuid import UUID
 from .models import (
     BudgetTracking,
     CategoryBudget,
+    Deal,
     FrequencyData,
     GroceryItem,
     GroceryList,
@@ -23,6 +24,7 @@ from .models import (
     PricePoint,
     PurchaseRecord,
     Receipt,
+    SavingsRecord,
     UserPreferences,
     WasteRecord,
 )
@@ -86,6 +88,14 @@ class DataStoreProtocol(Protocol):
     def save_preferences(self, preferences: dict[str, UserPreferences]) -> None: ...
     def get_user_preferences(self, user: str) -> UserPreferences | None: ...
     def save_user_preferences(self, prefs: UserPreferences) -> None: ...
+    def load_deals(self) -> list[Deal]: ...
+    def save_deals(self, deals: list[Deal]) -> None: ...
+    def add_deal(self, deal: Deal) -> UUID: ...
+    def get_deal(self, deal_id: str | UUID) -> Deal | None: ...
+    def update_deal(self, deal: Deal) -> None: ...
+    def load_savings(self) -> list[SavingsRecord]: ...
+    def save_savings(self, records: list[SavingsRecord]) -> None: ...
+    def add_savings(self, record: SavingsRecord) -> UUID: ...
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -129,6 +139,9 @@ def json_decoder(data: dict[str, Any]) -> dict[str, Any]:
                 "purchased_date",
                 "original_purchase_date",
                 "waste_logged_date",
+                "start_date",
+                "end_date",
+                "redeemed_date",
             ):
                 try:
                     data[key] = date.fromisoformat(value)
@@ -735,6 +748,136 @@ class DataStore:
         all_prefs = self.load_preferences()
         all_prefs[prefs.user] = prefs
         self.save_preferences(all_prefs)
+
+    # --- Deals (Coupons/Sales) Operations ---
+
+    def _deals_path(self) -> Path:
+        """Path to deals file."""
+        return self.data_dir / "deals.json"
+
+    def load_deals(self) -> list[Deal]:
+        """Load all deals.
+
+        Returns:
+            List of Deal records
+        """
+        path = self._deals_path()
+        if not path.exists():
+            return []
+
+        with open(path) as f:
+            data = json.load(f, object_hook=json_decoder)
+
+        return [Deal(**record) for record in data]
+
+    def save_deals(self, deals: list[Deal]) -> None:
+        """Save all deals.
+
+        Args:
+            deals: List of Deal records
+        """
+        path = self._deals_path()
+
+        with open(path, "w") as f:
+            json.dump([d.model_dump() for d in deals], f, cls=JSONEncoder, indent=2)
+
+    def add_deal(self, deal: Deal) -> UUID:
+        """Add a deal.
+
+        Args:
+            deal: Deal record
+
+        Returns:
+            Deal ID
+        """
+        deals = self.load_deals()
+        deals.append(deal)
+        self.save_deals(deals)
+        return deal.id
+
+    def get_deal(self, deal_id: str | UUID) -> Deal | None:
+        """Get a deal by ID.
+
+        Args:
+            deal_id: Deal ID
+
+        Returns:
+            Deal or None
+        """
+        if isinstance(deal_id, str):
+            try:
+                deal_id = UUID(deal_id)
+            except (ValueError, TypeError):
+                return None
+
+        deals = self.load_deals()
+        for deal in deals:
+            if deal.id == deal_id:
+                return deal
+        return None
+
+    def update_deal(self, deal: Deal) -> None:
+        """Update an existing deal.
+
+        Args:
+            deal: Deal record to update
+        """
+        deals = self.load_deals()
+        updated = False
+        for idx, existing in enumerate(deals):
+            if existing.id == deal.id:
+                deals[idx] = deal
+                updated = True
+                break
+        if not updated:
+            deals.append(deal)
+        self.save_deals(deals)
+
+    # --- Savings Tracking Operations ---
+
+    def _savings_path(self) -> Path:
+        """Path to savings file."""
+        return self.data_dir / "savings.json"
+
+    def load_savings(self) -> list[SavingsRecord]:
+        """Load all savings records.
+
+        Returns:
+            List of SavingsRecord
+        """
+        path = self._savings_path()
+        if not path.exists():
+            return []
+
+        with open(path) as f:
+            data = json.load(f, object_hook=json_decoder)
+
+        return [SavingsRecord(**record) for record in data]
+
+    def save_savings(self, records: list[SavingsRecord]) -> None:
+        """Save savings records.
+
+        Args:
+            records: List of SavingsRecord
+        """
+        path = self._savings_path()
+
+        with open(path, "w") as f:
+            json.dump([r.model_dump() for r in records], f, cls=JSONEncoder, indent=2)
+
+    def add_savings(self, record: SavingsRecord) -> UUID:
+        """Add a savings record.
+
+        Args:
+            record: SavingsRecord to add
+
+        Returns:
+            Record ID
+        """
+        records = self.load_savings()
+        records.append(record)
+        self.save_savings(records)
+        return record.id
 
 
 def create_data_store(

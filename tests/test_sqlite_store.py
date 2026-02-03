@@ -9,6 +9,8 @@ from grocery_tracker.data_store import BackendType, create_data_store
 from grocery_tracker.models import (
     BudgetTracking,
     CategoryBudget,
+    Deal,
+    DealType,
     FrequencyData,
     GroceryItem,
     GroceryList,
@@ -22,6 +24,8 @@ from grocery_tracker.models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    SavingsRecord,
+    SavingsType,
     UserPreferences,
     WasteReason,
     WasteRecord,
@@ -49,7 +53,7 @@ def sample_item():
         brand_preference=None,
         estimated_price=2.99,
         priority=Priority.MEDIUM,
-        added_by="Alice",
+        added_by="Francisco",
         notes="Ripe ones",
         status=ItemStatus.TO_BUY,
     )
@@ -63,7 +67,7 @@ def sample_receipt():
         store_location="Rockville, MD",
         transaction_date=date(2026, 1, 25),
         transaction_time=time(14, 32),
-        purchased_by="Alice",
+        purchased_by="Francisco",
         line_items=[
             LineItem(
                 item_name="Bananas",
@@ -345,7 +349,7 @@ class TestOutOfStockOperations:
             store="Giant",
             recorded_date=date(2026, 1, 25),
             substitution="Almond Milk",
-            reported_by="Alice",
+            reported_by="Francisco",
         )
         _ = sqlite_store.add_out_of_stock(record)
 
@@ -424,7 +428,7 @@ class TestWasteLogOperations:
             waste_logged_date=date(2026, 1, 28),
             reason=WasteReason.SPOILED,
             estimated_cost=2.99,
-            logged_by="Alice",
+            logged_by="Francisco",
         )
         sqlite_store.add_waste_record(record)
 
@@ -488,7 +492,7 @@ class TestUserPreferencesOperations:
     def test_save_and_load_user_preferences(self, sqlite_store):
         """Test saving and loading user preferences."""
         prefs = UserPreferences(
-            user="Alice",
+            user="Francisco",
             brand_preferences={"milk": "Organic Valley", "eggs": "Vital Farms"},
             dietary_restrictions=["dairy-free"],
             allergens=["peanuts"],
@@ -497,7 +501,7 @@ class TestUserPreferencesOperations:
         )
         sqlite_store.save_user_preferences(prefs)
 
-        loaded = sqlite_store.get_user_preferences("Alice")
+        loaded = sqlite_store.get_user_preferences("Francisco")
         assert loaded is not None
         assert loaded.brand_preferences["milk"] == "Organic Valley"
         assert "dairy-free" in loaded.dietary_restrictions
@@ -511,21 +515,51 @@ class TestUserPreferencesOperations:
     def test_save_and_load_all_preferences(self, sqlite_store):
         """Test bulk save and load of preferences."""
         preferences = {
-            "Alice": UserPreferences(
-                user="Alice",
+            "Francisco": UserPreferences(
+                user="Francisco",
                 brand_preferences={"milk": "Organic Valley"},
             ),
-            "Bob": UserPreferences(
-                user="Bob",
+            "Loki": UserPreferences(
+                user="Loki",
                 dietary_restrictions=["vegetarian"],
             ),
         }
         sqlite_store.save_preferences(preferences)
 
         loaded = sqlite_store.load_preferences()
-        assert "Alice" in loaded
-        assert "Bob" in loaded
-        assert loaded["Bob"].dietary_restrictions == ["vegetarian"]
+        assert "Francisco" in loaded
+        assert "Loki" in loaded
+        assert loaded["Loki"].dietary_restrictions == ["vegetarian"]
+
+
+class TestDealsAndSavingsOperations:
+    """Tests for deals and savings operations."""
+
+    def test_save_deals_clears_referenced_deals(self, sqlite_store):
+        """Saving deals should not violate savings FK constraints."""
+        deal = Deal(
+            item_name="Eggs",
+            store="Giant",
+            deal_type=DealType.SALE,
+            regular_price=3.99,
+            deal_price=2.99,
+        )
+        sqlite_store.add_deal(deal)
+
+        record = SavingsRecord(
+            item_name="Eggs",
+            store="Giant",
+            savings_amount=1.00,
+            savings_type=SavingsType.SALE,
+            deal_id=deal.id,
+        )
+        sqlite_store.add_savings(record)
+
+        sqlite_store.save_deals([])
+
+        savings_records = sqlite_store.load_savings()
+        assert len(savings_records) == 1
+        assert savings_records[0].deal_id is None
 
 
 class TestDataIntegrity:
