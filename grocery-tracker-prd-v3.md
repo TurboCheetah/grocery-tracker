@@ -68,7 +68,7 @@ A comprehensive grocery tracking and household inventory management system desig
 name = "grocery-tracker"
 version = "0.1.0"
 description = "Intelligent grocery list and inventory management"
-authors = [{name = "Alice", email = "user@example.com"}]
+authors = [{name = "Alice", email = "alice@example.com"}]
 requires-python = ">=3.12"
 dependencies = [
     "rich>=13.7.0",
@@ -268,7 +268,7 @@ monthly_budget = config.budget.monthly_limit
 
 ### Primary Users
 
-**Alice** — profile details redacted  
+**Alice** — Tech-savvy, professional fit specialist, detail-oriented data tracker  
 **Bob** — Household member, grocery co-manager, shared shopping responsibilities
 
 ### User Stories
@@ -2165,7 +2165,7 @@ def temp_data_dir(tmp_path):
 - Recipe cost calculator
 
 ### External Integrations
-- Notion database sync (user details redacted)
+- Optional notes database sync
 - Google Sheets export
 - YNAB/Mint budget sync
 - Instacart/grocery delivery API integration

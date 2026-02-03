@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Cache virtualenv and uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+          key: ${{ runner.os }}-uv-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('uv.lock', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-${{ steps.setup-python.outputs.python-version }}-
+            ${{ runner.os }}-uv-
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Lint
+        run: uv run ruff check src/
+
+      - name: Format check
+        run: uv run ruff format --check src/
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Cache virtualenv and uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+          key: ${{ runner.os }}-uv-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('uv.lock', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-${{ steps.setup-python.outputs.python-version }}-
+            ${{ runner.os }}-uv-
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Tests
+        run: uv run pytest
