@@ -112,6 +112,46 @@ class TestStatsFrequencyCommand:
         assert output["data"]["frequency"]["average_days"] == 5.0
 
 
+class TestStatsSeasonalCommand:
+    """Tests for grocery stats seasonal command."""
+
+    def test_seasonal_no_data(self, cli_data_dir):
+        """Seasonal command warns when no data."""
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "seasonal", "Strawberries"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert "warning" in output
+
+    def test_seasonal_with_data(self, cli_data_dir, data_store):
+        """Seasonal command returns data."""
+        from grocery_tracker.models import FrequencyData, PurchaseRecord
+
+        freq = FrequencyData(
+            item_name="Strawberries",
+            category="Produce",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 5, 1)),
+                PurchaseRecord(date=date(2025, 5, 15)),
+                PurchaseRecord(date=date(2025, 6, 2)),
+                PurchaseRecord(date=date(2025, 6, 20)),
+                PurchaseRecord(date=date(2025, 7, 5)),
+                PurchaseRecord(date=date(2025, 7, 22)),
+                PurchaseRecord(date=date(2025, 12, 3)),
+            ],
+        )
+        data_store.save_frequency_data({"Strawberries": freq})
+
+        result = runner.invoke(
+            app, ["--json", "--data-dir", str(cli_data_dir), "stats", "seasonal", "Strawberries"]
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert output["data"]["seasonal"]["season_range"] == "May-July"
+
+
 class TestStatsCompareCommand:
     """Tests for grocery stats compare command."""
 

@@ -83,6 +83,8 @@ class OutputFormatter:
             self._render_out_of_stock(data)
         elif "frequency" in data.get("data", {}):
             self._render_frequency(data)
+        elif "seasonal" in data.get("data", {}):
+            self._render_seasonal(data)
         elif "inventory_item" in data.get("data", {}):
             self._render_inventory_item(data)
         elif "inventory" in data.get("data", {}):
@@ -381,6 +383,34 @@ Total: ${receipt["total"]:.2f}""",
             self.console.print(f"Next expected: {freq['next_expected']}")
         self.console.print(f"Confidence: {freq.get('confidence', 'low')}")
         self.console.print(f"Total purchases: {freq.get('total_purchases', 0)}")
+
+    def _render_seasonal(self, data: dict) -> None:
+        """Render seasonal purchase patterns."""
+        seasonal = data["data"]["seasonal"]
+
+        self.console.print(f"\n[bold]Seasonal Pattern: {seasonal['item_name']}[/bold]")
+
+        if seasonal.get("season_range"):
+            self.console.print(f"Season: {seasonal['season_range']}")
+        self.console.print(f"Confidence: {seasonal.get('confidence', 'low')}")
+        self.console.print(f"Total purchases: {seasonal.get('total_purchases', 0)}")
+
+        if seasonal.get("peak_months"):
+            self.console.print(f"Peak months: {', '.join(seasonal['peak_months'])}")
+
+        if seasonal.get("months"):
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Month")
+            table.add_column("Purchases", justify="right")
+            table.add_column("%", justify="right")
+
+            for month in seasonal["months"]:
+                table.add_row(
+                    month["month_name"],
+                    str(month["purchase_count"]),
+                    f"{month['percentage']:.1f}%",
+                )
+            self.console.print(table)
 
     def _render_inventory_item(self, data: dict) -> None:
         """Render a single inventory item."""

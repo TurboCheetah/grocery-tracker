@@ -327,6 +327,52 @@ class TestFrequencySummary:
         assert result.average_days_between_purchases == 5.0
 
 
+class TestSeasonalPatterns:
+    """Tests for seasonal purchase patterns."""
+
+    def test_no_data(self, analytics):
+        """Returns None when no frequency data exists."""
+        result = analytics.get_seasonal_pattern("Strawberries")
+        assert result is None
+
+    def test_seasonal_pattern_detects_peak_months(self, analytics, data_store):
+        """Detects peak months and season range."""
+        freq = FrequencyData(
+            item_name="Strawberries",
+            category="Produce",
+            purchase_history=[
+                PurchaseRecord(date=date(2025, 5, 1)),
+                PurchaseRecord(date=date(2025, 5, 15)),
+                PurchaseRecord(date=date(2025, 6, 2)),
+                PurchaseRecord(date=date(2025, 6, 20)),
+                PurchaseRecord(date=date(2025, 7, 5)),
+                PurchaseRecord(date=date(2025, 7, 22)),
+                PurchaseRecord(date=date(2025, 12, 3)),
+            ],
+        )
+        data_store.save_frequency_data({"Strawberries": freq})
+
+        result = analytics.get_seasonal_pattern("Strawberries")
+        assert result is not None
+        assert result.season_range == "May-July"
+        assert result.peak_months == ["May", "June", "July"]
+        assert result.total_purchases == 7
+        assert result.confidence == "medium"
+
+    def test_year_round_pattern(self, analytics, data_store):
+        """Flags year-round purchasing when most months have activity."""
+        purchase_history = [
+            PurchaseRecord(date=date(2025, month, 1)) for month in range(1, 13)
+        ]
+        freq = FrequencyData(item_name="Milk", purchase_history=purchase_history)
+        data_store.save_frequency_data({"Milk": freq})
+
+        result = analytics.get_seasonal_pattern("Milk")
+        assert result is not None
+        assert result.year_round is True
+        assert result.season_range == "Year-round"
+
+
 class TestCategoryGuessing:
     """Tests for category guessing heuristic."""
 

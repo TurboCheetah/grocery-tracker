@@ -21,6 +21,14 @@ A comprehensive grocery tracking and household inventory management system desig
 
 ---
 
+## Implementation Status
+
+**Last updated**: February 3, 2026  
+
+- Phase 2 — Seasonal patterns (Purchase Frequency Analysis): Implemented (analytics computation, `stats seasonal` CLI, Rich/JSON output, tests)
+
+---
+
 ## Technical Architecture
 
 ### Technology Stack: **Python with uv**

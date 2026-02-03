@@ -458,6 +458,31 @@ def stats_frequency(
         raise typer.Exit(code=1)
 
 
+@stats_app.command("seasonal")
+def stats_seasonal(
+    item: Annotated[str, typer.Argument(help="Item name")],
+) -> None:
+    """View seasonal purchase patterns for an item."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        pattern = analytics.get_seasonal_pattern(item)
+
+        if not pattern:
+            formatter.warning(f"No seasonal pattern data for '{item}'")
+            return
+
+        output_data = {
+            "success": True,
+            "data": {
+                "seasonal": pattern.model_dump(),
+            },
+        }
+        formatter.output(output_data, f"Seasonal pattern for {pattern.item_name}")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
 @stats_app.command("compare")
 def stats_compare(
     item: Annotated[str, typer.Argument(help="Item name to compare prices")],
