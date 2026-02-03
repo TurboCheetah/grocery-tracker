@@ -1356,6 +1356,7 @@ from datetime import date, time
 
 class LineItem(BaseModel):
     item_name: str
+    category: str | None = None
     quantity: float = 1.0
     unit_price: float
     total_price: float
