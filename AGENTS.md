@@ -103,3 +103,19 @@ def add(item: str, quantity: float = 1.0):
 - All integration tests passing
 - Use `typer.testing.CliRunner` for CLI tests
 - Use `tmp_path` fixture for data persistence tests
+
+## Agent Knowledge Index
+
+- Latest Sprint 2 implementation + handoff:
+  - `references/agent-handoffs/2026-02-10-sprint2-complete.md`
+  - Includes: implemented scope, validation commands/results, Linear issue updates, and next steps.
+
+## Execution Notes
+
+- Always create/use a feature branch (`codex/...`) before substantive edits.
+- Commit messages must use Conventional Commits.
+- Keep related work in a single commit when follow-up changes are only missed formatting/lint cleanup.
+- Repo enforces global coverage on `pytest`; targeted `-k` runs can pass tests but still fail coverage gate. Use full `uv run pytest` for final validation.
+- Before finalizing, run both:
+  - `uv run ruff check .`
+  - `uv run ruff format --check src/`
