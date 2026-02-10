@@ -48,3 +48,6 @@ config.toml
 # OS
 .DS_Store
 Thumbs.db
+
+# Local/private Claude artifacts
+.claude/local/
