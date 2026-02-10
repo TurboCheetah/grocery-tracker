@@ -1,14 +1,11 @@
 """Tests for analytics module."""
 
 from datetime import date, timedelta
-from unittest.mock import MagicMock
 
 import pytest
 
 from grocery_tracker.analytics import Analytics, normalize_item_name
-from grocery_tracker.data_store import DataStore
 from grocery_tracker.models import (
-    CategorySpending,
     FrequencyData,
     LineItem,
     OutOfStockRecord,
@@ -16,7 +13,6 @@ from grocery_tracker.models import (
     PricePoint,
     PurchaseRecord,
     Receipt,
-    Suggestion,
 )
 
 
@@ -315,6 +311,26 @@ class TestSuggestions:
         assert len(oos) >= 1
         assert oos[0].item_name == "Oat Milk"
 
+    def test_out_of_stock_suggestion_includes_substitutions(self, analytics, data_store):
+        """Out-of-stock suggestion includes substitute candidates when available."""
+        data_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="Giant", substitution="Soy Milk")
+        )
+        data_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="Giant", substitution="Almond Milk")
+        )
+        data_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="TJ", substitution="Almond Milk")
+        )
+
+        suggestions = analytics.get_suggestions()
+        oos = [s for s in suggestions if s.type == "out_of_stock"]
+        assert len(oos) >= 1
+        substitutions = oos[0].data.get("substitutions", [])
+        assert len(substitutions) >= 1
+        assert substitutions[0]["item_name"] == "Almond Milk"
+        assert substitutions[0]["count"] == 2
+
     def test_suggestions_sorted_by_priority(self, analytics, data_store):
         """Suggestions are sorted by priority (high first)."""
         today = date.today()
@@ -331,9 +347,7 @@ class TestSuggestions:
 
         # Create OOS record (low priority)
         for _ in range(3):
-            data_store.add_out_of_stock(
-                OutOfStockRecord(item_name="Oat Milk", store="Giant")
-            )
+            data_store.add_out_of_stock(OutOfStockRecord(item_name="Oat Milk", store="Giant"))
 
         suggestions = analytics.get_suggestions()
         if len(suggestions) >= 2:
@@ -364,6 +378,62 @@ class TestOutOfStock:
         record = analytics.record_out_of_stock(item_name="Eggs", store="Giant")
         assert record.substitution is None
         assert record.reported_by is None
+
+
+class TestItemRecommendations:
+    """Tests for item store recommendations."""
+
+    def test_recommend_item_ranks_stores(self, analytics, data_store):
+        """Recommendation ranks stores with rationale and confidence."""
+        today = date.today()
+        data_store.update_price("Oat Milk", "Giant", 4.99, today - timedelta(days=1))
+        data_store.update_price("Oat Milk", "Giant", 5.19, today - timedelta(days=14))
+        data_store.update_price("Oat Milk", "TJ", 4.49, today - timedelta(days=2))
+        data_store.update_price("Oat Milk", "TJ", 4.59, today - timedelta(days=12))
+        data_store.update_price("Oat Milk", "Whole Foods", 5.89, today - timedelta(days=3))
+        data_store.update_price("Oat Milk", "Whole Foods", 5.99, today - timedelta(days=20))
+        data_store.add_out_of_stock(OutOfStockRecord(item_name="Oat Milk", store="Giant"))
+        data_store.add_out_of_stock(OutOfStockRecord(item_name="Oat Milk", store="Giant"))
+
+        recommendation = analytics.recommend_item("Oat Milk")
+        assert recommendation is not None
+        assert recommendation.recommended_store == "TJ"
+        assert recommendation.confidence in {"medium", "high"}
+        assert len(recommendation.ranked_stores) == 3
+        assert recommendation.ranked_stores[0].store == "TJ"
+        assert recommendation.ranked_stores[0].rank == 1
+        assert len(recommendation.ranked_stores[0].rationale) >= 1
+
+    def test_recommend_item_returns_none_for_low_confidence(self, analytics, data_store):
+        """No recommendation is returned when confidence is below threshold."""
+        data_store.update_price("Milk", "Giant", 5.49, date.today() - timedelta(days=300))
+
+        recommendation = analytics.recommend_item("Milk")
+        assert recommendation is None
+
+    def test_recommend_item_substitutions_are_deterministic(self, analytics, data_store):
+        """Substitution ranking is deterministic for equal-count outcomes."""
+        today = date.today()
+        data_store.update_price("Oat Milk", "Giant", 4.99, today - timedelta(days=1))
+        data_store.update_price("Oat Milk", "TJ", 4.69, today - timedelta(days=2))
+        data_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="Giant", substitution="Soy Milk")
+        )
+        data_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="Giant", substitution="Almond Milk")
+        )
+        data_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="TJ", substitution="Almond Milk")
+        )
+        data_store.add_out_of_stock(
+            OutOfStockRecord(item_name="Oat Milk", store="TJ", substitution="Soy Milk")
+        )
+
+        recommendation = analytics.recommend_item("Oat Milk")
+        assert recommendation is not None
+        assert len(recommendation.substitutions) >= 2
+        assert recommendation.substitutions[0].item_name == "Almond Milk"
+        assert recommendation.substitutions[1].item_name == "Soy Milk"
 
 
 class TestFrequencySummary:

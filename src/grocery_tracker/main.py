@@ -75,9 +75,7 @@ def _parse_category_budget_args(category_values: list[str] | None) -> dict[str, 
     for raw in category_values:
         separator = ":" if ":" in raw else "=" if "=" in raw else None
         if separator is None:
-            raise ValueError(
-                f"Invalid category budget '{raw}'. Use 'Category:Amount'."
-            )
+            raise ValueError(f"Invalid category budget '{raw}'. Use 'Category:Amount'.")
 
         category, amount = raw.split(separator, 1)
         category_name = category.strip()
@@ -87,14 +85,10 @@ def _parse_category_budget_args(category_values: list[str] | None) -> dict[str, 
         try:
             limit = float(amount.strip())
         except ValueError as exc:
-            raise ValueError(
-                f"Invalid category budget '{raw}'. Amount must be a number."
-            ) from exc
+            raise ValueError(f"Invalid category budget '{raw}'. Amount must be a number.") from exc
 
         if limit < 0:
-            raise ValueError(
-                f"Invalid category budget '{raw}'. Amount must be >= 0."
-            )
+            raise ValueError(f"Invalid category budget '{raw}'. Amount must be >= 0.")
 
         category_limits[category_name] = limit
 
@@ -540,6 +534,31 @@ def stats_suggest() -> None:
         raise typer.Exit(code=1)
 
 
+@stats_app.command("recommend")
+def stats_recommend(
+    item: Annotated[str, typer.Argument(help="Item name to recommend a store for")],
+) -> None:
+    """Recommend the best store and substitutes for an item."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        recommendation = analytics.recommend_item(item)
+
+        if recommendation is None:
+            formatter.warning(f"Not enough data to recommend stores for '{item}'")
+            return
+
+        output_data = {
+            "success": True,
+            "data": {
+                "recommendation": recommendation.model_dump(),
+            },
+        }
+        formatter.output(output_data, f"Recommendation for {item}")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
 # Out-of-stock subcommand group
 oos_app = typer.Typer(help="Out-of-stock tracking")
 app.add_typer(oos_app, name="out-of-stock")
@@ -552,9 +571,7 @@ def oos_report(
     substitution: Annotated[
         str | None, typer.Option("--sub", "-s", help="What was bought instead")
     ] = None,
-    reported_by: Annotated[
-        str | None, typer.Option("--by", help="Who is reporting")
-    ] = None,
+    reported_by: Annotated[str | None, typer.Option("--by", help="Who is reporting")] = None,
 ) -> None:
     """Report an item as out of stock at a store."""
     try:
@@ -581,12 +598,8 @@ def oos_report(
 
 @oos_app.command("list")
 def oos_list(
-    item: Annotated[
-        str | None, typer.Option("--item", "-i", help="Filter by item name")
-    ] = None,
-    store: Annotated[
-        str | None, typer.Option("--store", "-s", help="Filter by store")
-    ] = None,
+    item: Annotated[str | None, typer.Option("--item", "-i", help="Filter by item name")] = None,
+    store: Annotated[str | None, typer.Option("--store", "-s", help="Filter by store")] = None,
 ) -> None:
     """List out-of-stock records."""
     try:
@@ -971,12 +984,8 @@ def prefs_set(
     dietary: Annotated[
         list[str] | None, typer.Option("--dietary", help="Dietary restriction")
     ] = None,
-    allergen: Annotated[
-        list[str] | None, typer.Option("--allergen", help="Allergen")
-    ] = None,
-    favorite: Annotated[
-        list[str] | None, typer.Option("--favorite", help="Favorite item")
-    ] = None,
+    allergen: Annotated[list[str] | None, typer.Option("--allergen", help="Allergen")] = None,
+    favorite: Annotated[list[str] | None, typer.Option("--favorite", help="Favorite item")] = None,
 ) -> None:
     """Set user preferences."""
     try:

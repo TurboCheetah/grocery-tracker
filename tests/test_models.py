@@ -14,6 +14,7 @@ from grocery_tracker.models import (
     GroceryList,
     InventoryItem,
     InventoryLocation,
+    ItemRecommendation,
     ItemStatus,
     LineItem,
     OutOfStockRecord,
@@ -24,6 +25,8 @@ from grocery_tracker.models import (
     PurchaseRecord,
     Receipt,
     SpendingSummary,
+    StorePreferenceScore,
+    SubstitutionRecommendation,
     Suggestion,
     WasteReason,
     WasteRecord,
@@ -303,9 +306,7 @@ class TestCategorySpending:
 
     def test_create(self):
         """Create category spending."""
-        cs = CategorySpending(
-            category="Produce", total=80.00, percentage=18.0, item_count=15
-        )
+        cs = CategorySpending(category="Produce", total=80.00, percentage=18.0, item_count=15)
         assert cs.category == "Produce"
         assert cs.total == 80.00
         assert cs.percentage == 18.0
@@ -420,6 +421,65 @@ class TestSuggestion:
             data={"current": 4.99, "average": 3.99},
         )
         assert s.data["current"] == 4.99
+
+
+class TestStorePreferenceScore:
+    """Tests for StorePreferenceScore model."""
+
+    def test_create(self):
+        score = StorePreferenceScore(
+            store="TJ",
+            rank=1,
+            score=0.82,
+            current_price=4.99,
+            average_price=5.10,
+            out_of_stock_count=0,
+            samples=4,
+            recency_days=3,
+        )
+        assert score.store == "TJ"
+        assert score.rank == 1
+        assert score.score == 0.82
+
+
+class TestSubstitutionRecommendation:
+    """Tests for SubstitutionRecommendation model."""
+
+    def test_create(self):
+        sub = SubstitutionRecommendation(
+            item_name="Almond Milk",
+            count=3,
+            stores=["Giant", "TJ"],
+        )
+        assert sub.item_name == "Almond Milk"
+        assert sub.count == 3
+        assert sub.stores == ["Giant", "TJ"]
+
+
+class TestItemRecommendation:
+    """Tests for ItemRecommendation model."""
+
+    def test_create(self):
+        rec = ItemRecommendation(
+            item_name="Milk",
+            confidence="high",
+            confidence_score=0.85,
+            recommended_store="TJ",
+            ranked_stores=[
+                StorePreferenceScore(
+                    store="TJ",
+                    rank=1,
+                    score=0.85,
+                    current_price=4.99,
+                    average_price=5.05,
+                )
+            ],
+            substitutions=[SubstitutionRecommendation(item_name="Almond Milk", count=2)],
+        )
+        assert rec.item_name == "Milk"
+        assert rec.recommended_store == "TJ"
+        assert rec.ranked_stores[0].store == "TJ"
+        assert rec.substitutions[0].item_name == "Almond Milk"
 
 
 # --- Phase 3 Model Tests ---

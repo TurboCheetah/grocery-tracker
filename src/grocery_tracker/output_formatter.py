@@ -77,6 +77,8 @@ class OutputFormatter:
             self._render_spending(data)
         elif "comparison" in data.get("data", {}):
             self._render_price_comparison(data)
+        elif "recommendation" in data.get("data", {}):
+            self._render_recommendation(data)
         elif "suggestions" in data.get("data", {}):
             self._render_suggestions(data)
         elif "out_of_stock" in data.get("data", {}):
@@ -255,24 +257,19 @@ Total: ${receipt["total"]:.2f}""",
         spending = data["data"]["spending"]
 
         self.console.print(f"\n[bold]Spending Summary ({spending['period']})[/bold]")
-        self.console.print(
-            f"Period: {spending['start_date']} to {spending['end_date']}"
-        )
+        self.console.print(f"Period: {spending['start_date']} to {spending['end_date']}")
         self.console.print(f"Total spent: ${spending['total_spending']:.2f}")
         self.console.print(f"Receipts: {spending['receipt_count']}")
         self.console.print(f"Items purchased: {spending['item_count']}")
 
         if spending.get("budget_limit") is not None:
             self.console.print(
-                f"\nBudget: ${spending['total_spending']:.2f} / "
-                f"${spending['budget_limit']:.2f}"
+                f"\nBudget: ${spending['total_spending']:.2f} / ${spending['budget_limit']:.2f}"
             )
             remaining = spending.get("budget_remaining", 0)
             pct = spending.get("budget_percentage", 0)
             color = "green" if remaining > 0 else "red"
-            self.console.print(
-                f"Remaining: [{color}]${remaining:.2f}[/{color}] ({pct:.1f}% used)"
-            )
+            self.console.print(f"Remaining: [{color}]${remaining:.2f}[/{color}] ({pct:.1f}% used)")
 
         if spending.get("categories"):
             self.console.print("\n[dim]By category:[/dim]")
@@ -347,6 +344,63 @@ Total: ${receipt["total"]:.2f}""",
                 f"\nPotential savings: [green]${comp['savings']:.2f}[/green] "
                 f"by buying at {comp['cheapest_store']}"
             )
+
+    def _render_recommendation(self, data: dict) -> None:
+        """Render item store recommendation."""
+        rec = data["data"]["recommendation"]
+
+        self.console.print(f"\n[bold]Store Recommendation: {rec['item_name']}[/bold]")
+        self.console.print(
+            f"Recommended store: [green]{rec.get('recommended_store') or '-'}[/green]"
+        )
+        self.console.print(
+            f"Confidence: {rec.get('confidence', 'low')} ({rec.get('confidence_score', 0):.2f})"
+        )
+
+        ranked_stores = rec.get("ranked_stores", [])
+        if ranked_stores:
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Rank", justify="right")
+            table.add_column("Store")
+            table.add_column("Score", justify="right")
+            table.add_column("Current", justify="right")
+            table.add_column("Avg", justify="right")
+            table.add_column("OOS", justify="right")
+            table.add_column("Notes")
+
+            for row in ranked_stores:
+                table.add_row(
+                    str(row.get("rank", "")),
+                    row.get("store", "-"),
+                    f"{row.get('score', 0):.3f}",
+                    f"${row.get('current_price', 0):.2f}",
+                    f"${row.get('average_price', 0):.2f}",
+                    str(row.get("out_of_stock_count", 0)),
+                    "; ".join(row.get("rationale", [])) or "-",
+                )
+            self.console.print(table)
+
+        substitutions = rec.get("substitutions", [])
+        if substitutions:
+            sub_table = Table(show_header=True, header_style="bold")
+            sub_table.add_column("Substitute")
+            sub_table.add_column("Count", justify="right")
+            sub_table.add_column("Stores")
+
+            for sub in substitutions:
+                sub_table.add_row(
+                    sub.get("item_name", "-"),
+                    str(sub.get("count", 0)),
+                    ", ".join(sub.get("stores", [])) or "-",
+                )
+
+            self.console.print("\n[dim]Substitution history:[/dim]")
+            self.console.print(sub_table)
+
+        if rec.get("rationale"):
+            self.console.print("\n[dim]Why:[/dim]")
+            for reason in rec["rationale"]:
+                self.console.print(f"  - {reason}")
 
     def _render_suggestions(self, data: dict) -> None:
         """Render smart suggestions."""
