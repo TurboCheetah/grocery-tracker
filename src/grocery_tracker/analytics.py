@@ -11,11 +11,14 @@ from .models import (
     CategoryInflation,
     CategorySpending,
     FrequencyData,
+    ItemRecommendation,
     OutOfStockRecord,
     PriceComparison,
     PricePoint,
     PurchaseRecord,
     SpendingSummary,
+    StorePreferenceScore,
+    SubstitutionRecommendation,
     Suggestion,
     WasteReason,
     WasteRecord,
@@ -54,11 +57,7 @@ class Analytics:
         receipts = self.data_store.list_receipts()
 
         # Filter to period
-        period_receipts = [
-            r
-            for r in receipts
-            if start_date <= r.transaction_date <= today
-        ]
+        period_receipts = [r for r in receipts if start_date <= r.transaction_date <= today]
 
         total_spending = sum(r.total for r in period_receipts)
         total_items = sum(len(r.line_items) for r in period_receipts)
@@ -123,9 +122,7 @@ class Analytics:
         """
         history = self.data_store.load_price_history()
         canonical_target = normalize_item_name(item_name)
-        matched_keys = [
-            key for key in history if normalize_item_name(key) == canonical_target
-        ]
+        matched_keys = [key for key in history if normalize_item_name(key) == canonical_target]
 
         if not matched_keys:
             return None
@@ -205,12 +202,10 @@ class Analytics:
                 Suggestion(
                     type="restock",
                     item_name=(
-                        grouped["display_name"]
-                        or canonical_item_display_name(canonical_name)
+                        grouped["display_name"] or canonical_item_display_name(canonical_name)
                     ),
                     message=(
-                        f"Usually buy every {avg:.0f} days, "
-                        f"last purchase {days_since} days ago"
+                        f"Usually buy every {avg:.0f} days, last purchase {days_since} days ago"
                     ),
                     priority=priority,
                     data={
@@ -270,6 +265,13 @@ class Analytics:
 
         for (canonical_item, store), count in oos_counts.items():
             if count >= 2:
+                substitutions = self._substitution_recommendations(
+                    canonical_item,
+                    records=oos_records,
+                )
+                message = f"Out of stock {count} times at {store}"
+                if substitutions:
+                    message += f"; try {substitutions[0].item_name}"
                 suggestions.append(
                     Suggestion(
                         type="out_of_stock",
@@ -277,9 +279,13 @@ class Analytics:
                             canonical_item,
                             canonical_item_display_name(canonical_item),
                         ),
-                        message=f"Out of stock {count} times at {store}",
+                        message=message,
                         priority="low",
-                        data={"store": store, "count": count},
+                        data={
+                            "store": store,
+                            "count": count,
+                            "substitutions": [s.model_dump() for s in substitutions],
+                        },
                     )
                 )
 
@@ -288,6 +294,168 @@ class Analytics:
         suggestions.sort(key=lambda s: priority_order.get(s.priority, 1))
 
         return suggestions
+
+    def recommend_item(
+        self,
+        item_name: str,
+        min_confidence: float = 0.45,
+    ) -> ItemRecommendation | None:
+        """Recommend the best store for an item based on history quality.
+
+        Args:
+            item_name: Item to recommend a store for
+            min_confidence: Minimum confidence score required to return a recommendation
+
+        Returns:
+            ItemRecommendation when confidence threshold is met, otherwise None.
+        """
+        history = self.data_store.load_price_history()
+        canonical_target = normalize_item_name(item_name)
+        matched_keys = [key for key in history if normalize_item_name(key) == canonical_target]
+        if not matched_keys:
+            return None
+
+        store_points: dict[str, list[PricePoint]] = defaultdict(list)
+        for key in matched_keys:
+            for store_name, price_history in history[key].items():
+                store_points[store_name].extend(price_history.price_points)
+
+        if not store_points:
+            return None
+
+        oos_records = self.data_store.load_out_of_stock()
+        oos_count_by_store: dict[str, int] = defaultdict(int)
+        for record in oos_records:
+            if normalize_item_name(record.item_name) == canonical_target:
+                oos_count_by_store[record.store] += 1
+
+        stats: list[dict] = []
+        for store_name, points in store_points.items():
+            if not points:
+                continue
+
+            latest = self._latest_price_point(points)
+            if latest is None:
+                continue
+
+            avg_price = round(sum(pp.price for pp in points) / len(points), 2)
+            stats.append(
+                {
+                    "store": store_name,
+                    "current_price": latest.price,
+                    "average_price": avg_price,
+                    "samples": len(points),
+                    "recency_days": max((date.today() - latest.date).days, 0),
+                    "out_of_stock_count": oos_count_by_store.get(store_name, 0),
+                }
+            )
+
+        if not stats:
+            return None
+
+        current_prices = [s["current_price"] for s in stats]
+        min_price = min(current_prices)
+        max_price = max(current_prices)
+
+        for store_stats in stats:
+            if max_price == min_price:
+                price_score = 0.7
+            else:
+                price_score = (max_price - store_stats["current_price"]) / (max_price - min_price)
+            recency_score = max(0.0, 1.0 - store_stats["recency_days"] / 90.0)
+            sample_score = min(store_stats["samples"] / 6.0, 1.0)
+            availability_score = max(
+                0.0,
+                1.0 - min(store_stats["out_of_stock_count"], 5) / 5.0,
+            )
+
+            store_stats["score"] = round(
+                (0.5 * price_score)
+                + (0.2 * recency_score)
+                + (0.15 * sample_score)
+                + (0.15 * availability_score),
+                4,
+            )
+
+        stats.sort(
+            key=lambda s: (
+                -s["score"],
+                s["current_price"],
+                s["out_of_stock_count"],
+                s["store"].lower(),
+            )
+        )
+
+        store_coverage_score = min(len(stats) / 3.0, 1.0)
+        sample_depth_score = min(sum(s["samples"] for s in stats) / 12.0, 1.0)
+        freshness_score = sum(max(0.0, 1.0 - s["recency_days"] / 90.0) for s in stats) / len(stats)
+        availability_score = sum(
+            max(0.0, 1.0 - min(s["out_of_stock_count"], 5) / 5.0) for s in stats
+        ) / len(stats)
+        confidence_score = round(
+            (0.3 * store_coverage_score)
+            + (0.35 * sample_depth_score)
+            + (0.2 * freshness_score)
+            + (0.15 * availability_score),
+            2,
+        )
+
+        if confidence_score < min_confidence:
+            return None
+
+        confidence = "high" if confidence_score >= 0.75 else "medium"
+        ranked_stores: list[StorePreferenceScore] = []
+        for rank, row in enumerate(stats, start=1):
+            rationale = []
+            if row["current_price"] == min_price:
+                rationale.append("Lowest current price.")
+            if row["out_of_stock_count"] == 0:
+                rationale.append("No out-of-stock reports.")
+            elif row["out_of_stock_count"] > 0:
+                rationale.append(f"{row['out_of_stock_count']} out-of-stock reports.")
+            if row["recency_days"] <= 14:
+                rationale.append("Recent price data.")
+            elif row["recency_days"] > 60:
+                rationale.append("Price data is stale.")
+
+            ranked_stores.append(
+                StorePreferenceScore(
+                    store=row["store"],
+                    rank=rank,
+                    score=row["score"],
+                    current_price=row["current_price"],
+                    average_price=row["average_price"],
+                    out_of_stock_count=row["out_of_stock_count"],
+                    samples=row["samples"],
+                    recency_days=row["recency_days"],
+                    rationale=rationale,
+                )
+            )
+
+        substitutions = self._substitution_recommendations(
+            item_name=item_name,
+            records=oos_records,
+        )
+
+        recommendation_rationale = [
+            "Ranking uses price, recency, sample depth, and out-of-stock history.",
+        ]
+        if len(stats) > 1 and max_price > min_price:
+            recommendation_rationale.append(
+                f"Current price spread across stores: ${max_price - min_price:.2f}."
+            )
+        if substitutions:
+            recommendation_rationale.append(f"Common substitute: {substitutions[0].item_name}.")
+
+        return ItemRecommendation(
+            item_name=canonical_item_display_name(canonical_target),
+            confidence=confidence,
+            confidence_score=confidence_score,
+            recommended_store=ranked_stores[0].store if ranked_stores else None,
+            ranked_stores=ranked_stores,
+            substitutions=substitutions,
+            rationale=recommendation_rationale,
+        )
 
     def record_out_of_stock(
         self,
@@ -328,9 +496,7 @@ class Analytics:
         frequency = self.data_store.load_frequency_data()
         canonical_target = normalize_item_name(item_name)
         matching = [
-            freq
-            for key, freq in frequency.items()
-            if normalize_item_name(key) == canonical_target
+            freq for key, freq in frequency.items() if normalize_item_name(key) == canonical_target
         ]
 
         if not matching:
@@ -442,6 +608,56 @@ class Analytics:
             grouped[canonical]["purchase_history"].extend(freq.purchase_history)
         return grouped
 
+    def _substitution_recommendations(
+        self,
+        item_name: str,
+        limit: int = 3,
+        records: list[OutOfStockRecord] | None = None,
+    ) -> list[SubstitutionRecommendation]:
+        """Build substitution suggestions from out-of-stock history."""
+        oos_records = records if records is not None else self.data_store.load_out_of_stock()
+        canonical_target = normalize_item_name(item_name)
+
+        substitution_counts: dict[str, int] = defaultdict(int)
+        substitution_display_names: dict[str, str] = {}
+        substitution_stores: dict[str, set[str]] = defaultdict(set)
+
+        for record in oos_records:
+            if normalize_item_name(record.item_name) != canonical_target:
+                continue
+            if not record.substitution:
+                continue
+
+            canonical_sub = normalize_item_name(record.substitution)
+            if not canonical_sub:
+                continue
+
+            substitution_counts[canonical_sub] += 1
+            substitution_stores[canonical_sub].add(record.store)
+            if canonical_sub not in substitution_display_names:
+                substitution_display_names[canonical_sub] = canonical_item_display_name(
+                    record.substitution
+                )
+
+        ranked = sorted(
+            substitution_counts.items(),
+            key=lambda row: (
+                -row[1],
+                substitution_display_names.get(row[0], row[0]).lower(),
+            ),
+        )[:limit]
+
+        return [
+            SubstitutionRecommendation(
+                item_name=substitution_display_names.get(
+                    canonical_sub, canonical_item_display_name(canonical_sub)
+                ),
+                count=count,
+                stores=sorted(substitution_stores.get(canonical_sub, set())),
+            )
+            for canonical_sub, count in ranked
+        ]
+
     def _group_price_history(self, history_data: dict) -> dict[str, dict]:
         grouped: dict[str, dict] = {}
         for item_name, stores in history_data.items():
@@ -490,24 +706,90 @@ class Analytics:
         """Guess category from item name. Simple heuristic."""
         name = item_name.lower()
 
-        produce = ["banana", "apple", "avocado", "tomato", "lettuce", "onion",
-                    "potato", "carrot", "pepper", "strawberr", "blueberr",
-                    "orange", "lemon", "lime", "grape", "mango", "pear",
-                    "celery", "broccoli", "spinach", "kale", "cucumber",
-                    "garlic", "ginger", "mushroom", "corn", "bean", "pea"]
+        produce = [
+            "banana",
+            "apple",
+            "avocado",
+            "tomato",
+            "lettuce",
+            "onion",
+            "potato",
+            "carrot",
+            "pepper",
+            "strawberr",
+            "blueberr",
+            "orange",
+            "lemon",
+            "lime",
+            "grape",
+            "mango",
+            "pear",
+            "celery",
+            "broccoli",
+            "spinach",
+            "kale",
+            "cucumber",
+            "garlic",
+            "ginger",
+            "mushroom",
+            "corn",
+            "bean",
+            "pea",
+        ]
         dairy = ["milk", "cheese", "yogurt", "butter", "cream", "egg"]
-        meat = ["chicken", "beef", "pork", "turkey", "fish", "salmon",
-                "shrimp", "steak", "bacon", "sausage", "ham"]
-        bakery = ["bread", "bagel", "muffin", "roll", "cake", "donut",
-                  "croissant", "tortilla", "bun"]
+        meat = [
+            "chicken",
+            "beef",
+            "pork",
+            "turkey",
+            "fish",
+            "salmon",
+            "shrimp",
+            "steak",
+            "bacon",
+            "sausage",
+            "ham",
+        ]
+        bakery = [
+            "bread",
+            "bagel",
+            "muffin",
+            "roll",
+            "cake",
+            "donut",
+            "croissant",
+            "tortilla",
+            "bun",
+        ]
         frozen = ["frozen", "ice cream", "pizza"]
-        beverages = ["juice", "soda", "water", "coffee", "tea", "wine",
-                     "beer", "kombucha"]
-        snacks = ["chips", "cookie", "cracker", "popcorn", "pretzel",
-                  "candy", "chocolate", "granola bar", "nut"]
-        pantry = ["rice", "pasta", "sauce", "oil", "vinegar", "sugar",
-                  "flour", "salt", "spice", "cereal", "oat", "can",
-                  "soup", "broth"]
+        beverages = ["juice", "soda", "water", "coffee", "tea", "wine", "beer", "kombucha"]
+        snacks = [
+            "chips",
+            "cookie",
+            "cracker",
+            "popcorn",
+            "pretzel",
+            "candy",
+            "chocolate",
+            "granola bar",
+            "nut",
+        ]
+        pantry = [
+            "rice",
+            "pasta",
+            "sauce",
+            "oil",
+            "vinegar",
+            "sugar",
+            "flour",
+            "salt",
+            "spice",
+            "cereal",
+            "oat",
+            "can",
+            "soup",
+            "broth",
+        ]
 
         categories = [
             (produce, "Produce"),
@@ -584,10 +866,7 @@ class Analytics:
             start_date = today.replace(day=1)
 
         records = self.data_store.load_waste_log()
-        period_records = [
-            r for r in records
-            if start_date <= r.waste_logged_date <= today
-        ]
+        period_records = [r for r in records if start_date <= r.waste_logged_date <= today]
 
         total_cost = sum(r.estimated_cost or 0.0 for r in period_records)
         total_items = len(period_records)
@@ -642,9 +921,7 @@ class Analytics:
                     + " — consider buying less"
                 )
             elif count >= 2:
-                insights.append(
-                    f"{item} wasted {count} times — buy smaller quantities?"
-                )
+                insights.append(f"{item} wasted {count} times — buy smaller quantities?")
 
         # Most common reason
         reason_counts: dict[str, int] = defaultdict(int)

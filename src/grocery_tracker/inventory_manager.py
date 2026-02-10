@@ -158,8 +158,7 @@ class InventoryManager:
         inventory = self.data_store.load_inventory()
 
         expiring = [
-            i for i in inventory
-            if i.expiration_date is not None and i.expiration_date <= cutoff
+            i for i in inventory if i.expiration_date is not None and i.expiration_date <= cutoff
         ]
 
         return sorted(expiring, key=lambda i: i.expiration_date)  # type: ignore[arg-type, return-value]

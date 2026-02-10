@@ -300,6 +300,40 @@ class Suggestion(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
 
 
+class StorePreferenceScore(BaseModel):
+    """Scored store recommendation details for an item."""
+
+    store: str
+    rank: int
+    score: float
+    current_price: float
+    average_price: float
+    out_of_stock_count: int = 0
+    samples: int = 0
+    recency_days: int = 0
+    rationale: list[str] = Field(default_factory=list)
+
+
+class SubstitutionRecommendation(BaseModel):
+    """Recommended substitute from out-of-stock history."""
+
+    item_name: str
+    count: int
+    stores: list[str] = Field(default_factory=list)
+
+
+class ItemRecommendation(BaseModel):
+    """Store recommendation for a specific item."""
+
+    item_name: str
+    confidence: str = "low"
+    confidence_score: float = 0.0
+    recommended_store: str | None = None
+    ranked_stores: list[StorePreferenceScore] = Field(default_factory=list)
+    substitutions: list[SubstitutionRecommendation] = Field(default_factory=list)
+    rationale: list[str] = Field(default_factory=list)
+
+
 # --- Phase 3 Models ---
 
 

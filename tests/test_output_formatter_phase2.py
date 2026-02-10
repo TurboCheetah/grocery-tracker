@@ -24,7 +24,12 @@ class TestRenderSpending:
                     "receipt_count": 8,
                     "item_count": 45,
                     "categories": [
-                        {"category": "Produce", "total": 80.00, "percentage": 17.8, "item_count": 15},
+                        {
+                            "category": "Produce",
+                            "total": 80.00,
+                            "percentage": 17.8,
+                            "item_count": 15,
+                        },
                     ],
                     "budget_limit": None,
                     "budget_remaining": None,
@@ -244,6 +249,58 @@ class TestRenderSuggestions:
         assert "Smart Suggestions" in output
         assert "Milk" in output
         assert "Eggs" in output
+        assert "Oat Milk" in output
+
+
+class TestRenderRecommendation:
+    """Tests for recommendation rendering."""
+
+    def test_render_recommendation(self):
+        """Renders recommendation table and substitution history."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "recommendation": {
+                    "item_name": "Milk",
+                    "recommended_store": "TJ",
+                    "confidence": "high",
+                    "confidence_score": 0.82,
+                    "ranked_stores": [
+                        {
+                            "store": "TJ",
+                            "rank": 1,
+                            "score": 0.82,
+                            "current_price": 4.99,
+                            "average_price": 5.10,
+                            "out_of_stock_count": 0,
+                            "rationale": ["Lowest current price.", "Recent price data."],
+                        },
+                        {
+                            "store": "Giant",
+                            "rank": 2,
+                            "score": 0.66,
+                            "current_price": 5.49,
+                            "average_price": 5.39,
+                            "out_of_stock_count": 1,
+                            "rationale": ["1 out-of-stock reports."],
+                        },
+                    ],
+                    "substitutions": [
+                        {"item_name": "Oat Milk", "count": 2, "stores": ["Giant", "TJ"]}
+                    ],
+                    "rationale": [
+                        "Ranking uses price, recency, sample depth, and out-of-stock history."
+                    ],
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Store Recommendation" in output
+        assert "Confidence" in output
+        assert "TJ" in output
+        assert "Substitution history" in output
         assert "Oat Milk" in output
 
 
