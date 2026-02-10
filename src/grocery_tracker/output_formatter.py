@@ -75,6 +75,8 @@ class OutputFormatter:
             self._render_by_category(data)
         elif "spending" in data.get("data", {}):
             self._render_spending(data)
+        elif "savings" in data.get("data", {}):
+            self._render_savings(data)
         elif "comparison" in data.get("data", {}):
             self._render_price_comparison(data)
         elif "route" in data.get("data", {}):
@@ -166,12 +168,18 @@ Status: {item.get("status", "to_buy")}"""
         """Render receipt summary with Rich."""
         receipt = data["data"]["receipt"]
 
+        discount_total = receipt.get("discount_total", 0.0)
+        coupon_total = receipt.get("coupon_total", 0.0)
+        savings_line = ""
+        if discount_total > 0 or coupon_total > 0:
+            savings_line = f"\nDiscounts: ${discount_total:.2f}\nCoupons: ${coupon_total:.2f}"
+
         panel = Panel(
             f"""[bold]{receipt["store_name"]}[/bold]
 
 Date: {receipt["transaction_date"]} {receipt.get("transaction_time", "")}
 Items: {len(receipt["line_items"])}
-Total: ${receipt["total"]:.2f}""",
+Total: ${receipt["total"]:.2f}{savings_line}""",
             title="Receipt Processed",
             border_style="green",
         )
@@ -183,12 +191,15 @@ Total: ${receipt["total"]:.2f}""",
         table.add_column("Item")
         table.add_column("Qty", justify="right")
         table.add_column("Price", justify="right")
+        table.add_column("Savings", justify="right")
 
         for item in receipt["line_items"]:
+            line_savings = item.get("discount_amount", 0.0) + item.get("coupon_amount", 0.0)
             table.add_row(
                 item["item_name"],
                 str(item["quantity"]),
                 f"${item['total_price']:.2f}",
+                f"${line_savings:.2f}" if line_savings > 0 else "-",
             )
 
         self.console.print(table)
@@ -314,6 +325,47 @@ Total: ${receipt["total"]:.2f}""",
                     windows,
                 )
             self.console.print(table)
+
+    def _render_savings(self, data: dict) -> None:
+        """Render savings summary."""
+        savings = data["data"]["savings"]
+
+        self.console.print(f"\n[bold]Savings Summary ({savings['period']})[/bold]")
+        self.console.print(f"Period: {savings['start_date']} to {savings['end_date']}")
+        self.console.print(f"Total savings: [green]${savings.get('total_savings', 0):.2f}[/green]")
+        self.console.print(f"Receipts with savings: {savings.get('receipt_count', 0)}")
+        self.console.print(f"Savings records: {savings.get('record_count', 0)}")
+
+        self._render_savings_contributor_table("Top items", savings.get("top_items", []))
+        self._render_savings_contributor_table("Top stores", savings.get("top_stores", []))
+        self._render_savings_contributor_table("Top categories", savings.get("top_categories", []))
+        self._render_savings_contributor_table("By source", savings.get("by_source", []))
+
+        assumptions = savings.get("assumptions", [])
+        if assumptions:
+            self.console.print("\n[dim]Assumptions:[/dim]")
+            for assumption in assumptions:
+                self.console.print(f"  - {assumption}")
+
+    def _render_savings_contributor_table(self, title: str, rows: list[dict]) -> None:
+        """Render one savings contributor table when data exists."""
+        if not rows:
+            return
+
+        self.console.print(f"\n[dim]{title}:[/dim]")
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Name")
+        table.add_column("Savings", justify="right")
+        table.add_column("Records", justify="right")
+
+        for row in rows:
+            table.add_row(
+                row.get("name", "-"),
+                f"${row.get('total_savings', 0):.2f}",
+                str(row.get("record_count", 0)),
+            )
+
+        self.console.print(table)
 
     def _render_price_comparison(self, data: dict) -> None:
         """Render price comparison across stores."""

@@ -585,6 +585,29 @@ def stats_route() -> None:
         raise typer.Exit(code=1)
 
 
+@stats_app.command("savings")
+def stats_savings(
+    period: Annotated[
+        str, typer.Option("--period", "-p", help="Period: weekly, monthly, yearly")
+    ] = "monthly",
+) -> None:
+    """Summarize savings captured from sale/coupon metadata."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        summary = analytics.savings_summary(period=period)
+
+        output_data = {
+            "success": True,
+            "data": {
+                "savings": summary.model_dump(),
+            },
+        }
+        formatter.output(output_data, f"Savings summary ({period})")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
 # Out-of-stock subcommand group
 oos_app = typer.Typer(help="Out-of-stock tracking")
 app.add_typer(oos_app, name="out-of-stock")

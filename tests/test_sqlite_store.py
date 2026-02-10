@@ -22,6 +22,7 @@ from grocery_tracker.models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    SavingsRecord,
     UserPreferences,
     WasteReason,
     WasteRecord,
@@ -70,16 +71,22 @@ def sample_receipt():
                 quantity=3,
                 unit_price=0.49,
                 total_price=1.47,
+                sale=True,
+                discount_amount=0.3,
+                regular_unit_price=0.59,
             ),
             LineItem(
                 item_name="Milk",
                 quantity=1,
                 unit_price=5.49,
                 total_price=5.49,
+                coupon_amount=0.5,
             ),
         ],
         subtotal=6.96,
         tax=0.0,
+        discount_total=0.4,
+        coupon_total=0.2,
         total=6.96,
         payment_method="Credit",
     )
@@ -189,6 +196,10 @@ class TestReceiptOperations:
         assert loaded.store_name == "Giant Food"
         assert loaded.total == 6.96
         assert len(loaded.line_items) == 2
+        assert loaded.discount_total == 0.4
+        assert loaded.coupon_total == 0.2
+        assert loaded.line_items[0].sale is True
+        assert loaded.line_items[1].coupon_amount == 0.5
 
     def test_load_receipt_not_found(self, sqlite_store):
         """Test loading non-existent receipt returns None."""
@@ -228,6 +239,59 @@ class TestReceiptOperations:
 
         loaded = sqlite_store.load_receipt(sample_receipt.id)
         assert loaded.line_items[0].matched_list_item_id == sample_item.id
+
+
+class TestSavingsRecordOperations:
+    """Tests for savings records CRUD operations."""
+
+    def test_add_and_list_savings_records(self, sqlite_store, sample_receipt):
+        """Savings records are persisted and listed."""
+        sqlite_store.save_receipt(sample_receipt)
+
+        record = SavingsRecord(
+            receipt_id=sample_receipt.id,
+            transaction_date=sample_receipt.transaction_date,
+            store=sample_receipt.store_name,
+            item_name="Bananas",
+            category="Produce",
+            savings_amount=1.2,
+            source="line_item_discount",
+        )
+        sqlite_store.add_savings_record(record)
+
+        records = sqlite_store.load_savings_records()
+        assert len(records) == 1
+        assert records[0].item_name == "Bananas"
+        assert records[0].savings_amount == 1.2
+
+    def test_save_savings_records_replaces_existing(self, sqlite_store, sample_receipt):
+        """Bulk save replaces existing savings records."""
+        sqlite_store.save_receipt(sample_receipt)
+        first = SavingsRecord(
+            receipt_id=sample_receipt.id,
+            transaction_date=sample_receipt.transaction_date,
+            store=sample_receipt.store_name,
+            item_name="Bananas",
+            category="Produce",
+            savings_amount=1.0,
+            source="line_item_discount",
+        )
+        second = SavingsRecord(
+            receipt_id=sample_receipt.id,
+            transaction_date=sample_receipt.transaction_date,
+            store=sample_receipt.store_name,
+            item_name="Milk",
+            category="Dairy & Eggs",
+            savings_amount=0.5,
+            source="receipt_discount",
+        )
+
+        sqlite_store.add_savings_record(first)
+        sqlite_store.save_savings_records([second])
+
+        records = sqlite_store.load_savings_records()
+        assert len(records) == 1
+        assert records[0].item_name == "Milk"
 
 
 class TestPriceHistoryOperations:

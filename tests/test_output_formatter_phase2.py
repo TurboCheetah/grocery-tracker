@@ -204,6 +204,47 @@ class TestRenderPriceComparison:
         assert "Delta vs 30d" in output
 
 
+class TestRenderSavings:
+    """Tests for savings summary rendering."""
+
+    def test_render_savings_with_contributors(self):
+        """Renders savings totals and contributor tables."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "savings": {
+                    "period": "monthly",
+                    "start_date": "2026-02-01",
+                    "end_date": "2026-02-10",
+                    "total_savings": 12.5,
+                    "receipt_count": 3,
+                    "record_count": 5,
+                    "top_items": [
+                        {"name": "Milk", "total_savings": 6.0, "record_count": 2},
+                    ],
+                    "top_stores": [
+                        {"name": "Giant", "total_savings": 8.0, "record_count": 3},
+                    ],
+                    "top_categories": [
+                        {"name": "Dairy & Eggs", "total_savings": 9.0, "record_count": 3},
+                    ],
+                    "by_source": [
+                        {"name": "line_item_discount", "total_savings": 7.0, "record_count": 2},
+                    ],
+                    "assumptions": ["Line-item savings use explicit discounts."],
+                }
+            }
+        }
+
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Savings Summary" in output
+        assert "12.50" in output
+        assert "Milk" in output
+        assert "line_item_discount" in output
+
+
 class TestRenderSuggestions:
     """Tests for suggestions rendering."""
 

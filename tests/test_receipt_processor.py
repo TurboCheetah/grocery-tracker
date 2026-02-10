@@ -186,7 +186,13 @@ class TestProcessReceipt:
             store_name="Giant",
             transaction_date=date(2024, 1, 15),
             line_items=[
-                LineItem(item_name="Milk", quantity=1, unit_price=4.99, total_price=4.99),
+                LineItem(
+                    item_name="Milk",
+                    quantity=1,
+                    unit_price=4.99,
+                    total_price=4.99,
+                    sale=True,
+                ),
             ],
             subtotal=4.99,
             total=5.29,
@@ -198,6 +204,41 @@ class TestProcessReceipt:
         assert history is not None
         assert len(history.price_points) == 1
         assert history.price_points[0].price == 4.99
+        assert history.price_points[0].sale is True
+
+    def test_process_receipt_persists_savings_records(self, data_store, receipt_processor):
+        """Line and receipt-level discounts are persisted as savings records."""
+        receipt_input = ReceiptInput(
+            store_name="Giant",
+            transaction_date=date(2024, 1, 15),
+            line_items=[
+                LineItem(
+                    item_name="Milk",
+                    quantity=1,
+                    unit_price=4.99,
+                    total_price=4.99,
+                    discount_amount=1.0,
+                ),
+                LineItem(
+                    item_name="Bread",
+                    quantity=1,
+                    unit_price=3.0,
+                    total_price=3.0,
+                ),
+            ],
+            subtotal=7.99,
+            discount_total=1.0,
+            coupon_total=0.5,
+            total=7.99,
+        )
+
+        receipt_processor.process_receipt(receipt_input)
+        records = data_store.load_savings_records()
+
+        assert len(records) == 3
+        assert round(sum(record.savings_amount for record in records), 2) == 2.5
+        assert any(record.source == "line_item_discount" for record in records)
+        assert any(record.source == "receipt_discount" for record in records)
 
 
 class TestProcessReceiptDict:
@@ -218,6 +259,30 @@ class TestProcessReceiptDict:
         result = receipt_processor.process_receipt_dict(receipt_dict)
         assert result.items_purchased == 1
         assert result.total_spent == 5.29
+
+    def test_process_from_dict_with_discount_aliases(self, receipt_processor, data_store):
+        """Dictionary processing accepts receipt-level discount aliases."""
+        receipt_dict = {
+            "store_name": "Giant",
+            "transaction_date": date(2024, 1, 15),
+            "line_items": [
+                {
+                    "item_name": "Milk",
+                    "quantity": 1,
+                    "unit_price": 4.99,
+                    "total_price": 4.99,
+                }
+            ],
+            "subtotal": 4.99,
+            "receipt_discount_total": 0.5,
+            "receipt_coupon_total": 0.5,
+            "total": 4.99,
+        }
+
+        receipt_processor.process_receipt_dict(receipt_dict)
+        records = data_store.load_savings_records()
+        assert len(records) == 1
+        assert records[0].savings_amount == 1.0
 
 
 class TestReconciliationSummary:

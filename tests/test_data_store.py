@@ -12,6 +12,7 @@ from grocery_tracker.models import (
     GroceryList,
     LineItem,
     Receipt,
+    SavingsRecord,
 )
 
 
@@ -139,6 +140,8 @@ class TestReceiptPersistence:
                 LineItem(item_name="Milk", quantity=1, unit_price=4.99, total_price=4.99),
             ],
             subtotal=4.99,
+            discount_total=0.5,
+            coupon_total=0.25,
             total=5.29,
         )
         receipt_id = data_store.save_receipt(receipt)
@@ -147,6 +150,8 @@ class TestReceiptPersistence:
         assert loaded is not None
         assert loaded.store_name == "Giant Food"
         assert len(loaded.line_items) == 1
+        assert loaded.discount_total == 0.5
+        assert loaded.coupon_total == 0.25
 
     def test_load_nonexistent_receipt(self, data_store):
         """Returns None for non-existent receipt."""
@@ -264,6 +269,36 @@ class TestPriceHistoryPersistence:
         point = history["Milk"]["Giant"].price_points[0]
         assert point.receipt_id == receipt_id
         assert point.sale is True
+
+
+class TestSavingsRecordPersistence:
+    """Tests for savings records save/load."""
+
+    def test_save_and_load_savings_records(self, data_store):
+        """Saved savings records can be loaded back."""
+        receipt = Receipt(
+            store_name="Giant",
+            transaction_date=date(2024, 1, 15),
+            line_items=[LineItem(item_name="Milk", quantity=1, unit_price=4.0, total_price=4.0)],
+            subtotal=4.0,
+            total=4.0,
+        )
+        receipt_id = data_store.save_receipt(receipt)
+        record = SavingsRecord(
+            receipt_id=receipt_id,
+            transaction_date=date(2024, 1, 15),
+            store="Giant",
+            item_name="Milk",
+            category="Dairy & Eggs",
+            savings_amount=1.5,
+            source="line_item_discount",
+        )
+
+        data_store.add_savings_record(record)
+        loaded = data_store.load_savings_records()
+        assert len(loaded) == 1
+        assert loaded[0].item_name == "Milk"
+        assert loaded[0].savings_amount == 1.5
 
 
 class TestJSONDecoder:

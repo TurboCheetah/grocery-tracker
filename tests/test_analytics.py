@@ -15,6 +15,7 @@ from grocery_tracker.models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    SavingsRecord,
 )
 
 
@@ -250,6 +251,84 @@ class TestPriceComparison:
         result = analytics.price_comparison("milk")
         assert result is not None
         assert result.item_name == "Milk"
+
+
+class TestSavingsSummary:
+    """Tests for savings analytics summary."""
+
+    def test_empty_savings_summary(self, analytics):
+        """No savings records returns empty summary."""
+        summary = analytics.savings_summary()
+        assert summary.total_savings == 0.0
+        assert summary.record_count == 0
+        assert summary.receipt_count == 0
+
+    def test_monthly_savings_summary(self, analytics, data_store):
+        """Savings summary aggregates totals and contributors."""
+        today = date.today()
+        receipt = Receipt(
+            store_name="Giant",
+            transaction_date=today,
+            line_items=[LineItem(item_name="Milk", quantity=1, unit_price=4.99, total_price=4.99)],
+            subtotal=4.99,
+            total=4.99,
+        )
+        receipt_id = data_store.save_receipt(receipt)
+        data_store.add_savings_record(
+            SavingsRecord(
+                receipt_id=receipt_id,
+                transaction_date=today,
+                store="Giant",
+                item_name="Milk",
+                category="Dairy & Eggs",
+                savings_amount=1.0,
+                source="line_item_discount",
+            )
+        )
+        data_store.add_savings_record(
+            SavingsRecord(
+                receipt_id=receipt_id,
+                transaction_date=today,
+                store="Giant",
+                item_name="Eggs",
+                category="Dairy & Eggs",
+                savings_amount=0.5,
+                source="receipt_discount",
+            )
+        )
+
+        summary = analytics.savings_summary(period="monthly")
+        assert summary.total_savings == 1.5
+        assert summary.record_count == 2
+        assert summary.receipt_count == 1
+        assert summary.top_items[0].name == "Milk"
+        assert summary.top_stores[0].name == "Giant"
+
+    def test_savings_summary_excludes_old_records(self, analytics, data_store):
+        """Monthly savings excludes previous-month records."""
+        old_date = date.today().replace(day=1) - timedelta(days=1)
+        receipt = Receipt(
+            store_name="Giant",
+            transaction_date=old_date,
+            line_items=[LineItem(item_name="Milk", quantity=1, unit_price=4.99, total_price=4.99)],
+            subtotal=4.99,
+            total=4.99,
+        )
+        receipt_id = data_store.save_receipt(receipt)
+        data_store.add_savings_record(
+            SavingsRecord(
+                receipt_id=receipt_id,
+                transaction_date=old_date,
+                store="Giant",
+                item_name="Milk",
+                category="Dairy & Eggs",
+                savings_amount=2.0,
+                source="line_item_discount",
+            )
+        )
+
+        summary = analytics.savings_summary(period="monthly")
+        assert summary.total_savings == 0.0
 
 
 class TestSuggestions:
