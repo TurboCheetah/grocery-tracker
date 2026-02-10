@@ -334,6 +334,40 @@ class ItemRecommendation(BaseModel):
     rationale: list[str] = Field(default_factory=list)
 
 
+class RouteItemAssignment(BaseModel):
+    """Planned store assignment for a grocery list item."""
+
+    item_name: str
+    quantity: int | float | str = 1
+    category: str = "Other"
+    priority: Priority = Priority.MEDIUM
+    assigned_store: str | None = None
+    estimated_price: float | None = None
+    assignment_source: str = "unknown"
+    rationale: list[str] = Field(default_factory=list)
+
+
+class RouteStoreStop(BaseModel):
+    """A store stop in a shopping route plan."""
+
+    stop_number: int
+    store: str
+    items: list[RouteItemAssignment] = Field(default_factory=list)
+    item_count: int = 0
+    estimated_total: float = 0.0
+    rationale: list[str] = Field(default_factory=list)
+
+
+class ShoppingRoute(BaseModel):
+    """A deterministic shopping route across stores."""
+
+    total_items: int = 0
+    total_estimated_cost: float = 0.0
+    stops: list[RouteStoreStop] = Field(default_factory=list)
+    unassigned_items: list[RouteItemAssignment] = Field(default_factory=list)
+    rationale: list[str] = Field(default_factory=list)
+
+
 # --- Phase 3 Models ---
 
 

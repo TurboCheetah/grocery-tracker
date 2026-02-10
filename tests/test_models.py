@@ -24,6 +24,9 @@ from grocery_tracker.models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    RouteItemAssignment,
+    RouteStoreStop,
+    ShoppingRoute,
     SpendingSummary,
     StorePreferenceScore,
     SubstitutionRecommendation,
@@ -480,6 +483,61 @@ class TestItemRecommendation:
         assert rec.recommended_store == "TJ"
         assert rec.ranked_stores[0].store == "TJ"
         assert rec.substitutions[0].item_name == "Almond Milk"
+
+
+class TestRouteItemAssignment:
+    """Tests for RouteItemAssignment model."""
+
+    def test_create(self):
+        assignment = RouteItemAssignment(
+            item_name="Milk",
+            quantity=1,
+            category="Dairy & Eggs",
+            priority=Priority.HIGH,
+            assigned_store="TJ",
+            estimated_price=4.99,
+            assignment_source="recommendation",
+        )
+        assert assignment.item_name == "Milk"
+        assert assignment.assigned_store == "TJ"
+        assert assignment.priority == Priority.HIGH
+
+
+class TestRouteStoreStop:
+    """Tests for RouteStoreStop model."""
+
+    def test_create(self):
+        stop = RouteStoreStop(
+            stop_number=1,
+            store="TJ",
+            items=[RouteItemAssignment(item_name="Milk", assigned_store="TJ")],
+            item_count=1,
+            estimated_total=4.99,
+        )
+        assert stop.stop_number == 1
+        assert stop.store == "TJ"
+        assert stop.item_count == 1
+
+
+class TestShoppingRoute:
+    """Tests for ShoppingRoute model."""
+
+    def test_create(self):
+        route = ShoppingRoute(
+            total_items=2,
+            total_estimated_cost=9.98,
+            stops=[
+                RouteStoreStop(
+                    stop_number=1,
+                    store="TJ",
+                    item_count=2,
+                    estimated_total=9.98,
+                )
+            ],
+        )
+        assert route.total_items == 2
+        assert route.stops[0].store == "TJ"
+        assert route.total_estimated_cost == 9.98
 
 
 # --- Phase 3 Model Tests ---

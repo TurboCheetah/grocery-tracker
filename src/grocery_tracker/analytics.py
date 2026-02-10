@@ -12,10 +12,15 @@ from .models import (
     CategorySpending,
     FrequencyData,
     ItemRecommendation,
+    ItemStatus,
     OutOfStockRecord,
     PriceComparison,
     PricePoint,
+    Priority,
     PurchaseRecord,
+    RouteItemAssignment,
+    RouteStoreStop,
+    ShoppingRoute,
     SpendingSummary,
     StorePreferenceScore,
     SubstitutionRecommendation,
@@ -457,6 +462,126 @@ class Analytics:
             rationale=recommendation_rationale,
         )
 
+    def plan_shopping_route(self) -> ShoppingRoute:
+        """Build a deterministic store route for pending grocery list items."""
+        grocery_list = self.data_store.load_list()
+        pending_items = [item for item in grocery_list.items if item.status != ItemStatus.BOUGHT]
+
+        if not pending_items:
+            return ShoppingRoute(
+                rationale=["No pending grocery list items to route."],
+            )
+
+        grouped_history = self._group_price_history(self.data_store.load_price_history())
+
+        store_assignments: dict[str, list[RouteItemAssignment]] = defaultdict(list)
+        unassigned_items: list[RouteItemAssignment] = []
+
+        for item in pending_items:
+            rationale: list[str] = []
+            assigned_store: str | None = None
+            assignment_source = "unassigned"
+            estimated_price = item.estimated_price
+
+            if item.store:
+                assigned_store = item.store
+                assignment_source = "list_preference"
+                rationale.append("Uses the store set on the grocery list item.")
+                if estimated_price is None:
+                    estimated_price = self._latest_price_for_store(
+                        item_name=item.name,
+                        store=item.store,
+                        grouped_history=grouped_history,
+                    )
+            else:
+                recommendation = self.recommend_item(item.name, min_confidence=0.0)
+                if recommendation and recommendation.recommended_store:
+                    assigned_store = recommendation.recommended_store
+                    assignment_source = "recommendation"
+                    rationale.append("Assigned from historical price and availability scoring.")
+                    if estimated_price is None:
+                        for ranked_store in recommendation.ranked_stores:
+                            if ranked_store.store == assigned_store:
+                                estimated_price = ranked_store.current_price
+                                break
+
+                if assigned_store is None:
+                    fallback_store, fallback_price = self._fallback_store_from_history(
+                        item_name=item.name,
+                        grouped_history=grouped_history,
+                    )
+                    if fallback_store:
+                        assigned_store = fallback_store
+                        assignment_source = "price_history"
+                        rationale.append("Assigned to the lowest recent-price store.")
+                        if estimated_price is None:
+                            estimated_price = fallback_price
+
+            assignment = RouteItemAssignment(
+                item_name=item.name,
+                quantity=item.quantity,
+                category=item.category,
+                priority=item.priority,
+                assigned_store=assigned_store,
+                estimated_price=round(estimated_price, 2) if estimated_price is not None else None,
+                assignment_source=assignment_source,
+                rationale=rationale,
+            )
+
+            if assigned_store is None:
+                unassigned_items.append(assignment)
+            else:
+                store_assignments[assigned_store].append(assignment)
+
+        sorted_stores = sorted(
+            store_assignments.keys(),
+            key=lambda store: self._store_stop_sort_key(store, store_assignments[store]),
+        )
+
+        stops: list[RouteStoreStop] = []
+        for stop_number, store in enumerate(sorted_stores, start=1):
+            ordered_items = sorted(
+                store_assignments[store],
+                key=self._assignment_sort_key,
+            )
+            estimated_total = round(
+                sum(item.estimated_price or 0.0 for item in ordered_items),
+                2,
+            )
+
+            stop_rationale = []
+            if any(item.assignment_source == "list_preference" for item in ordered_items):
+                stop_rationale.append("Contains explicit store preferences from the list.")
+            if any(item.assignment_source == "recommendation" for item in ordered_items):
+                stop_rationale.append("Contains history-based store recommendations.")
+
+            stops.append(
+                RouteStoreStop(
+                    stop_number=stop_number,
+                    store=store,
+                    items=ordered_items,
+                    item_count=len(ordered_items),
+                    estimated_total=estimated_total,
+                    rationale=stop_rationale,
+                )
+            )
+
+        route_rationale = [
+            "Store order is deterministic: item priority, item count, then store name.",
+        ]
+        if unassigned_items:
+            route_rationale.append(
+                f"{len(unassigned_items)} item(s) are unassigned due to missing store and history."
+            )
+
+        return ShoppingRoute(
+            total_items=len(pending_items),
+            total_estimated_cost=round(sum(stop.estimated_total for stop in stops), 2),
+            stops=stops,
+            unassigned_items=sorted(unassigned_items, key=self._assignment_sort_key),
+            rationale=route_rationale,
+        )
+
     def record_out_of_stock(
         self,
         item_name: str,
@@ -701,6 +826,77 @@ class Analytics:
         if not purchases:
             return None
         return max(p.date for p in purchases)
+
+    @staticmethod
+    def _priority_weight(priority: Priority) -> int:
+        weights = {
+            Priority.HIGH: 3,
+            Priority.MEDIUM: 2,
+            Priority.LOW: 1,
+        }
+        return weights.get(priority, 1)
+
+    def _assignment_sort_key(self, assignment: RouteItemAssignment) -> tuple:
+        return (
+            -self._priority_weight(assignment.priority),
+            assignment.item_name.lower(),
+        )
+
+    def _store_stop_sort_key(
+        self,
+        store: str,
+        assignments: list[RouteItemAssignment],
+    ) -> tuple:
+        priority_score = sum(self._priority_weight(item.priority) for item in assignments)
+        return (
+            -priority_score,
+            -len(assignments),
+            store.lower(),
+        )
+
+    def _latest_price_for_store(
+        self,
+        item_name: str,
+        store: str,
+        grouped_history: dict[str, dict],
+    ) -> float | None:
+        canonical_item = normalize_item_name(item_name)
+        item_history = grouped_history.get(canonical_item)
+        if not item_history:
+            return None
+
+        for store_name, price_points in item_history["stores"].items():
+            if store_name.lower() != store.lower():
+                continue
+            latest = self._latest_price_point(price_points)
+            if latest is not None:
+                return latest.price
+        return None
+
+    def _fallback_store_from_history(
+        self,
+        item_name: str,
+        grouped_history: dict[str, dict],
+    ) -> tuple[str | None, float | None]:
+        canonical_item = normalize_item_name(item_name)
+        item_history = grouped_history.get(canonical_item)
+        if not item_history:
+            return None, None
+
+        candidates: list[tuple[str, float, int, int]] = []
+        for store_name, price_points in item_history["stores"].items():
+            latest = self._latest_price_point(price_points)
+            if latest is None:
+                continue
+            recency_days = max((date.today() - latest.date).days, 0)
+            candidates.append((store_name, latest.price, recency_days, len(price_points)))
+
+        if not candidates:
+            return None, None
+
+        candidates.sort(key=lambda row: (row[1], row[2], -row[3], row[0].lower()))
+        best_store, best_price, _, _ = candidates[0]
+        return best_store, best_price
 
     def _guess_category(self, item_name: str) -> str:
         """Guess category from item name. Simple heuristic."""
