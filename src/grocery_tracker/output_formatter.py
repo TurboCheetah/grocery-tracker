@@ -77,6 +77,8 @@ class OutputFormatter:
             self._render_spending(data)
         elif "comparison" in data.get("data", {}):
             self._render_price_comparison(data)
+        elif "route" in data.get("data", {}):
+            self._render_route(data)
         elif "recommendation" in data.get("data", {}):
             self._render_recommendation(data)
         elif "suggestions" in data.get("data", {}):
@@ -344,6 +346,55 @@ Total: ${receipt["total"]:.2f}""",
                 f"\nPotential savings: [green]${comp['savings']:.2f}[/green] "
                 f"by buying at {comp['cheapest_store']}"
             )
+
+    def _render_route(self, data: dict) -> None:
+        """Render deterministic shopping route."""
+        route = data["data"]["route"]
+
+        self.console.print("\n[bold]Shopping Route[/bold]")
+        self.console.print(f"Items to buy: {route.get('total_items', 0)}")
+        self.console.print(f"Estimated total: ${route.get('total_estimated_cost', 0):.2f}")
+
+        stops = route.get("stops", [])
+        if not stops:
+            self.console.print("[dim]No store stops available[/dim]")
+        else:
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Stop", justify="right")
+            table.add_column("Store")
+            table.add_column("Items", justify="right")
+            table.add_column("Est. Total", justify="right")
+
+            for stop in stops:
+                table.add_row(
+                    str(stop.get("stop_number", "")),
+                    stop.get("store", "-"),
+                    str(stop.get("item_count", 0)),
+                    f"${stop.get('estimated_total', 0):.2f}",
+                )
+            self.console.print(table)
+
+            for stop in stops:
+                self.console.print(f"\n[dim]{stop.get('store', '-')}:[/dim]")
+                for item in stop.get("items", []):
+                    est_price = item.get("estimated_price")
+                    est_price_label = f"${est_price:.2f}" if est_price is not None else "n/a"
+                    self.console.print(
+                        f"  - {item.get('item_name', '-')}"
+                        f" ({item.get('quantity', 1)})"
+                        f" [{item.get('assignment_source', 'unknown')}, {est_price_label}]"
+                    )
+
+        unassigned = route.get("unassigned_items", [])
+        if unassigned:
+            self.console.print("\n[yellow]Needs store assignment:[/yellow]")
+            for item in unassigned:
+                self.console.print(f"  - {item.get('item_name', '-')}")
+
+        if route.get("rationale"):
+            self.console.print("\n[dim]Why:[/dim]")
+            for reason in route["rationale"]:
+                self.console.print(f"  - {reason}")
 
     def _render_recommendation(self, data: dict) -> None:
         """Render item store recommendation."""

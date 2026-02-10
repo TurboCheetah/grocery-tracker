@@ -559,6 +559,32 @@ def stats_recommend(
         raise typer.Exit(code=1)
 
 
+@stats_app.command("route")
+def stats_route() -> None:
+    """Generate a deterministic multi-store shopping route."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        route = analytics.plan_shopping_route()
+
+        if route.total_items == 0:
+            formatter.warning("No pending items to plan a shopping route")
+            return
+
+        output_data = {
+            "success": True,
+            "data": {
+                "route": route.model_dump(),
+            },
+        }
+        formatter.output(
+            output_data,
+            f"Planned route across {len(route.stops)} store(s) for {route.total_items} item(s)",
+        )
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
 # Out-of-stock subcommand group
 oos_app = typer.Typer(help="Out-of-stock tracking")
 app.add_typer(oos_app, name="out-of-stock")

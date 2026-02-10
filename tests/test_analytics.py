@@ -5,12 +5,14 @@ from datetime import date, timedelta
 import pytest
 
 from grocery_tracker.analytics import Analytics, normalize_item_name
+from grocery_tracker.list_manager import ListManager
 from grocery_tracker.models import (
     FrequencyData,
     LineItem,
     OutOfStockRecord,
     PriceHistory,
     PricePoint,
+    Priority,
     PurchaseRecord,
     Receipt,
 )
@@ -434,6 +436,66 @@ class TestItemRecommendations:
         assert len(recommendation.substitutions) >= 2
         assert recommendation.substitutions[0].item_name == "Almond Milk"
         assert recommendation.substitutions[1].item_name == "Soy Milk"
+
+
+class TestShoppingRoutePlanner:
+    """Tests for deterministic shopping route planning."""
+
+    def test_route_empty_when_no_pending_items(self, analytics):
+        """Empty list returns a route with no stops."""
+        route = analytics.plan_shopping_route()
+        assert route.total_items == 0
+        assert route.stops == []
+        assert route.unassigned_items == []
+
+    def test_route_assigns_items_and_uses_recommendations(self, analytics, data_store):
+        """Items are assigned by store preference or recommendation."""
+        manager = ListManager(data_store=data_store)
+        manager.add_item(name="Apples", store="Giant", priority=Priority.HIGH)
+        manager.add_item(name="Milk", priority=Priority.MEDIUM)
+
+        today = date.today()
+        data_store.update_price("Milk", "TJ", 4.79, today - timedelta(days=1))
+        data_store.update_price("Milk", "TJ", 4.89, today - timedelta(days=8))
+        data_store.update_price("Milk", "Giant", 5.29, today - timedelta(days=2))
+        data_store.update_price("Milk", "Giant", 5.19, today - timedelta(days=7))
+
+        route = analytics.plan_shopping_route()
+        assert route.total_items == 2
+        assert len(route.stops) == 2
+
+        assignments = {
+            assignment.item_name: assignment
+            for stop in route.stops
+            for assignment in stop.items
+        }
+        assert assignments["Apples"].assigned_store == "Giant"
+        assert assignments["Apples"].assignment_source == "list_preference"
+        assert assignments["Milk"].assigned_store == "TJ"
+        assert assignments["Milk"].assignment_source in {"recommendation", "price_history"}
+
+    def test_route_store_order_is_deterministic(self, analytics, data_store):
+        """Store order is stable for tied stop metrics."""
+        manager = ListManager(data_store=data_store)
+        manager.add_item(name="Sourdough", store="Whole Foods", priority=Priority.HIGH)
+        manager.add_item(name="Bananas", store="Giant", priority=Priority.HIGH)
+        manager.add_item(name="Pasta", store="Aldi", priority=Priority.LOW)
+
+        route = analytics.plan_shopping_route()
+        stores = [stop.store for stop in route.stops]
+        assert stores == ["Giant", "Whole Foods", "Aldi"]
+
+    def test_route_unassigned_items_when_no_store_or_history(self, analytics, data_store):
+        """Items with no store and no history are left unassigned."""
+        manager = ListManager(data_store=data_store)
+        manager.add_item(name="Paprika")
+
+        route = analytics.plan_shopping_route()
+        assert route.total_items == 1
+        assert route.stops == []
+        assert len(route.unassigned_items) == 1
+        assert route.unassigned_items[0].item_name == "Paprika"
+        assert route.unassigned_items[0].assignment_source == "unassigned"
 
 
 class TestFrequencySummary:

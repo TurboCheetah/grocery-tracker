@@ -231,6 +231,49 @@ class TestStatsRecommendCommand:
         assert result.exit_code == 0
 
 
+class TestStatsRouteCommand:
+    """Tests for grocery stats route command."""
+
+    def test_route_no_pending_items(self, cli_data_dir):
+        """Route command warns when list has no pending items."""
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "route"])
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert "warning" in output
+
+    def test_route_with_items(self, cli_data_dir, data_store):
+        """Route command returns deterministic route data."""
+        today = date.today()
+        data_store.update_price("Milk", "TJ", 4.79, today - timedelta(days=1))
+        data_store.update_price("Milk", "TJ", 4.89, today - timedelta(days=8))
+        data_store.update_price("Milk", "Giant", 5.29, today - timedelta(days=2))
+        data_store.update_price("Milk", "Giant", 5.19, today - timedelta(days=7))
+
+        runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "add",
+                "Milk",
+            ],
+        )
+
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "route"])
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert output["data"]["route"]["total_items"] == 1
+        assert len(output["data"]["route"]["stops"]) >= 1
+
+    def test_route_rich_mode(self, cli_data_dir):
+        """Route command in Rich mode doesn't crash."""
+        runner.invoke(app, ["--data-dir", str(cli_data_dir), "add", "Bread", "--store", "Giant"])
+        result = runner.invoke(app, ["--data-dir", str(cli_data_dir), "stats", "route"])
+        assert result.exit_code == 0
+
+
 class TestOutOfStockReportCommand:
     """Tests for grocery out-of-stock report command."""
 

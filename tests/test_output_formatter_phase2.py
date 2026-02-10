@@ -304,6 +304,89 @@ class TestRenderRecommendation:
         assert "Oat Milk" in output
 
 
+class TestRenderRoute:
+    """Tests for route rendering."""
+
+    def test_render_route_with_stops(self):
+        """Renders shopping route table and item details."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "route": {
+                    "total_items": 3,
+                    "total_estimated_cost": 14.27,
+                    "stops": [
+                        {
+                            "stop_number": 1,
+                            "store": "Giant",
+                            "item_count": 2,
+                            "estimated_total": 9.48,
+                            "items": [
+                                {
+                                    "item_name": "Milk",
+                                    "quantity": 1,
+                                    "assignment_source": "recommendation",
+                                    "estimated_price": 4.99,
+                                },
+                                {
+                                    "item_name": "Bread",
+                                    "quantity": 1,
+                                    "assignment_source": "list_preference",
+                                    "estimated_price": 4.49,
+                                },
+                            ],
+                        },
+                        {
+                            "stop_number": 2,
+                            "store": "TJ",
+                            "item_count": 1,
+                            "estimated_total": 4.79,
+                            "items": [
+                                {
+                                    "item_name": "Eggs",
+                                    "quantity": 1,
+                                    "assignment_source": "recommendation",
+                                    "estimated_price": 4.79,
+                                }
+                            ],
+                        },
+                    ],
+                    "unassigned_items": [],
+                    "rationale": [
+                        "Store order is deterministic: item priority, item count, then store name."
+                    ],
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Shopping Route" in output
+        assert "Giant" in output
+        assert "TJ" in output
+        assert "Milk" in output
+
+    def test_render_route_with_unassigned(self):
+        """Renders unassigned item section."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "route": {
+                    "total_items": 1,
+                    "total_estimated_cost": 0.0,
+                    "stops": [],
+                    "unassigned_items": [{"item_name": "Paprika"}],
+                    "rationale": [],
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Needs store assignment" in output
+        assert "Paprika" in output
+
+
 class TestRenderOutOfStock:
     """Tests for out-of-stock rendering."""
 
