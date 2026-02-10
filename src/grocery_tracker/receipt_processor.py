@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator
 
 from .data_store import DataStore
+from .item_normalizer import canonical_item_display_name, normalize_item_name
 from .list_manager import ListManager
 from .models import ItemStatus, LineItem, Receipt, ReconciliationResult
 
@@ -114,7 +115,7 @@ class ReceiptProcessor:
 
             # Update price history
             self._update_price_history(
-                receipt_item.item_name,
+                canonical_item_display_name(receipt_item.item_name),
                 receipt_input.store_name,
                 receipt_item.unit_price,
                 receipt_input.transaction_date,
@@ -132,7 +133,7 @@ class ReceiptProcessor:
         # Update frequency data for all purchased items
         for receipt_item in receipt_input.line_items:
             self.data_store.update_frequency(
-                item_name=receipt_item.item_name,
+                item_name=canonical_item_display_name(receipt_item.item_name),
                 purchase_date=receipt_input.transaction_date,
                 quantity=receipt_item.quantity,
                 store=receipt_input.store_name,
@@ -188,8 +189,8 @@ class ReceiptProcessor:
         Returns:
             True if items match
         """
-        list_normalized = list_name.lower().strip()
-        receipt_normalized = receipt_name.lower().strip()
+        list_normalized = normalize_item_name(list_name)
+        receipt_normalized = normalize_item_name(receipt_name)
 
         # Exact match
         if list_normalized == receipt_normalized:

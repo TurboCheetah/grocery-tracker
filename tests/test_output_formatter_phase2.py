@@ -87,6 +87,46 @@ class TestRenderSpending:
         output = fmt.console.file.getvalue()
         assert "-50.00" in output
 
+    def test_render_spending_with_inflation_table(self):
+        """Renders category inflation details when present."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "spending": {
+                    "period": "monthly",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-01-27",
+                    "total_spending": 450.00,
+                    "receipt_count": 8,
+                    "item_count": 45,
+                    "categories": [],
+                    "category_inflation": [
+                        {
+                            "category": "Dairy & Eggs",
+                            "baseline_start": "2026-01-01",
+                            "baseline_end": "2026-01-14",
+                            "current_start": "2026-01-15",
+                            "current_end": "2026-01-27",
+                            "baseline_avg_price": 4.20,
+                            "current_avg_price": 5.00,
+                            "delta_pct": 19.0,
+                            "baseline_samples": 3,
+                            "current_samples": 4,
+                        }
+                    ],
+                    "budget_limit": None,
+                    "budget_remaining": None,
+                    "budget_percentage": None,
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Category inflation" in output
+        assert "Dairy & Eggs" in output
+        assert "19.0%" in output
+
 
 class TestRenderPriceComparison:
     """Tests for price comparison rendering."""
@@ -132,6 +172,31 @@ class TestRenderPriceComparison:
         fmt.output(data)
         output = fmt.console.file.getvalue()
         assert "Price Comparison" in output
+
+    def test_render_comparison_with_window_metrics(self):
+        """Renders 30d/90d metrics when present."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "comparison": {
+                    "item_name": "Milk",
+                    "stores": {"Giant": 5.49, "TJ": 4.99},
+                    "cheapest_store": "TJ",
+                    "cheapest_price": 4.99,
+                    "savings": 0.50,
+                    "average_price_30d": 5.10,
+                    "average_price_90d": 4.90,
+                    "delta_vs_30d_pct": -2.2,
+                    "delta_vs_90d_pct": 1.8,
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "30d avg" in output
+        assert "90d avg" in output
+        assert "Delta vs 30d" in output
 
 
 class TestRenderSuggestions:

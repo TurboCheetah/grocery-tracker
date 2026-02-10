@@ -58,6 +58,10 @@ class TestItemMatching:
         assert receipt_processor._items_match("Bananas", "Organic Bananas") is True
         assert receipt_processor._items_match("Milk", "Whole Milk 2%") is True
 
+    def test_canonical_suffix_match(self, receipt_processor):
+        """Common packaging/percentage suffixes do not block matching."""
+        assert receipt_processor._items_match("Bananas", "Organic Bananas 16oz") is True
+
     def test_reverse_substring_match(self, receipt_processor):
         """Receipt item name is substring of list item."""
         assert receipt_processor._items_match("Organic Bananas", "Bananas") is True

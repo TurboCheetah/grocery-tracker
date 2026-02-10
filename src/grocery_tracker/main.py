@@ -66,6 +66,41 @@ def get_inventory_manager() -> InventoryManager:
     return inventory_manager
 
 
+def _parse_category_budget_args(category_values: list[str] | None) -> dict[str, float]:
+    """Parse repeated category budget arguments into a category->limit mapping."""
+    if not category_values:
+        return {}
+
+    category_limits: dict[str, float] = {}
+    for raw in category_values:
+        separator = ":" if ":" in raw else "=" if "=" in raw else None
+        if separator is None:
+            raise ValueError(
+                f"Invalid category budget '{raw}'. Use 'Category:Amount'."
+            )
+
+        category, amount = raw.split(separator, 1)
+        category_name = category.strip()
+        if not category_name:
+            raise ValueError(f"Invalid category budget '{raw}'. Category is required.")
+
+        try:
+            limit = float(amount.strip())
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid category budget '{raw}'. Amount must be a number."
+            ) from exc
+
+        if limit < 0:
+            raise ValueError(
+                f"Invalid category budget '{raw}'. Amount must be >= 0."
+            )
+
+        category_limits[category_name] = limit
+
+    return category_limits
+
+
 @app.callback()
 def main(
     json_output: Annotated[
@@ -846,11 +881,24 @@ app.add_typer(budget_app, name="budget")
 def budget_set(
     limit: Annotated[float, typer.Argument(help="Monthly budget limit")],
     month: Annotated[str | None, typer.Option("--month", help="Month (YYYY-MM)")] = None,
+    category: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--category",
+            "-c",
+            help="Category allocation as 'Category:Amount' (repeat to set multiple)",
+        ),
+    ] = None,
 ) -> None:
     """Set monthly budget."""
     try:
         analytics = Analytics(data_store=get_data_store())
-        budget = analytics.set_budget(monthly_limit=limit, month=month)
+        category_limits = _parse_category_budget_args(category)
+        budget = analytics.set_budget(
+            monthly_limit=limit,
+            category_limits=category_limits or None,
+            month=month,
+        )
 
         output_data = {
             "success": True,

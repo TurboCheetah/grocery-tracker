@@ -245,6 +245,21 @@ class CategorySpending(BaseModel):
     item_count: int
 
 
+class CategoryInflation(BaseModel):
+    """Price inflation trend for a category within a period."""
+
+    category: str
+    baseline_start: date
+    baseline_end: date
+    current_start: date
+    current_end: date
+    baseline_avg_price: float
+    current_avg_price: float
+    delta_pct: float | None = None
+    baseline_samples: int = 0
+    current_samples: int = 0
+
+
 class SpendingSummary(BaseModel):
     """Spending analytics summary."""
 
@@ -255,6 +270,7 @@ class SpendingSummary(BaseModel):
     receipt_count: int
     item_count: int
     categories: list[CategorySpending] = Field(default_factory=list)
+    category_inflation: list[CategoryInflation] = Field(default_factory=list)
     budget_limit: float | None = None
     budget_remaining: float | None = None
     budget_percentage: float | None = None
@@ -268,6 +284,10 @@ class PriceComparison(BaseModel):
     cheapest_store: str | None = None
     cheapest_price: float | None = None
     savings: float | None = None  # difference between most and least expensive
+    average_price_30d: float | None = None
+    average_price_90d: float | None = None
+    delta_vs_30d_pct: float | None = None
+    delta_vs_90d_pct: float | None = None
 
 
 class Suggestion(BaseModel):

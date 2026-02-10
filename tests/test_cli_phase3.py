@@ -338,6 +338,44 @@ class TestBudgetSet:
         result = runner.invoke(app, ["--data-dir", str(cli_data_dir), "budget", "set", "500"])
         assert result.exit_code == 0
 
+    def test_set_budget_with_categories(self, cli_data_dir):
+        """Set budget with category allocations."""
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "budget",
+                "set",
+                "500",
+                "--category",
+                "Produce:120",
+                "--category",
+                "Dairy & Eggs:80",
+            ],
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert len(output["data"]["budget"]["category_budgets"]) == 2
+
+    def test_set_budget_with_invalid_category(self, cli_data_dir):
+        """Invalid category allocation format fails."""
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "budget",
+                "set",
+                "500",
+                "--category",
+                "Produce",
+            ],
+        )
+        assert result.exit_code == 1
+
 
 class TestBudgetStatus:
     """Tests for budget status command."""

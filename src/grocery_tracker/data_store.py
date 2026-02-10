@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID
 
+from .item_normalizer import normalize_item_name
 from .models import (
     BudgetTracking,
     CategoryBudget,
@@ -373,23 +374,39 @@ class DataStore:
             PriceHistory if found, None otherwise
         """
         history = self.load_price_history()
+        exact_keys = [item_name] if item_name in history else []
+        canonical_target = normalize_item_name(item_name)
+        matched_keys = exact_keys or [
+            key for key in history if normalize_item_name(key) == canonical_target
+        ]
 
-        if item_name not in history:
+        if not matched_keys:
             return None
 
         if store:
-            return history[item_name].get(store)
+            store_points = []
+            for key in matched_keys:
+                if store in history[key]:
+                    store_points.extend(history[key][store].price_points)
+            if not store_points:
+                return None
+            return PriceHistory(
+                item_name=matched_keys[0],
+                store=store,
+                price_points=sorted(store_points, key=lambda p: p.date),
+            )
 
-        # Combine all stores
+        # Combine all stores from all matched keys
         all_points = []
-        for store_history in history[item_name].values():
-            all_points.extend(store_history.price_points)
+        for key in matched_keys:
+            for store_history in history[key].values():
+                all_points.extend(store_history.price_points)
 
         if not all_points:
             return None
 
         return PriceHistory(
-            item_name=item_name,
+            item_name=matched_keys[0],
             store="all",
             price_points=sorted(all_points, key=lambda p: p.date),
         )

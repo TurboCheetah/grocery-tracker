@@ -291,6 +291,31 @@ Total: ${receipt["total"]:.2f}""",
                 )
             self.console.print(table)
 
+        if spending.get("category_inflation"):
+            self.console.print("\n[dim]Category inflation:[/dim]")
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Category")
+            table.add_column("Baseline", justify="right")
+            table.add_column("Current", justify="right")
+            table.add_column("Delta", justify="right")
+            table.add_column("Windows")
+
+            for row in spending["category_inflation"]:
+                delta = row.get("delta_pct")
+                delta_display = f"{delta:+.1f}%" if delta is not None else "n/a"
+                windows = (
+                    f"{row.get('baseline_start')}..{row.get('baseline_end')} vs "
+                    f"{row.get('current_start')}..{row.get('current_end')}"
+                )
+                table.add_row(
+                    row["category"],
+                    f"${row.get('baseline_avg_price', 0):.2f}",
+                    f"${row.get('current_avg_price', 0):.2f}",
+                    delta_display,
+                    windows,
+                )
+            self.console.print(table)
+
     def _render_price_comparison(self, data: dict) -> None:
         """Render price comparison across stores."""
         comp = data["data"]["comparison"]
@@ -307,6 +332,15 @@ Total: ${receipt["total"]:.2f}""",
             table.add_row(store, f"${price:.2f}", marker)
 
         self.console.print(table)
+
+        if comp.get("average_price_30d") is not None:
+            self.console.print(f"30d avg: ${comp['average_price_30d']:.2f}")
+        if comp.get("average_price_90d") is not None:
+            self.console.print(f"90d avg: ${comp['average_price_90d']:.2f}")
+        if comp.get("delta_vs_30d_pct") is not None:
+            self.console.print(f"Delta vs 30d: {comp['delta_vs_30d_pct']:+.1f}%")
+        if comp.get("delta_vs_90d_pct") is not None:
+            self.console.print(f"Delta vs 90d: {comp['delta_vs_90d_pct']:+.1f}%")
 
         if comp.get("savings") and comp["savings"] > 0:
             self.console.print(

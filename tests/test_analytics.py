@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from grocery_tracker.analytics import Analytics
+from grocery_tracker.analytics import Analytics, normalize_item_name
 from grocery_tracker.data_store import DataStore
 from grocery_tracker.models import (
     CategorySpending,
@@ -132,6 +132,46 @@ class TestSpendingSummary:
         assert len(summary.categories) > 0
         assert summary.total_spending == 6.96
 
+    def test_spending_includes_category_inflation(self, analytics, data_store):
+        """Spending summary includes category inflation with explicit windows."""
+        today = date.today()
+        first_half = today.replace(day=1)
+        second_half = today
+
+        if second_half == first_half:
+            pytest.skip("Need at least two days in period to calculate inflation windows.")
+
+        data_store.save_receipt(
+            Receipt(
+                store_name="Giant",
+                transaction_date=first_half,
+                line_items=[
+                    LineItem(item_name="Milk", quantity=1, unit_price=4.00, total_price=4.00),
+                ],
+                subtotal=4.00,
+                total=4.00,
+            )
+        )
+        data_store.save_receipt(
+            Receipt(
+                store_name="Giant",
+                transaction_date=second_half,
+                line_items=[
+                    LineItem(item_name="Milk", quantity=1, unit_price=5.00, total_price=5.00),
+                ],
+                subtotal=5.00,
+                total=5.00,
+            )
+        )
+
+        summary = analytics.spending_summary(period="monthly")
+        assert len(summary.category_inflation) >= 1
+        row = summary.category_inflation[0]
+        assert row.category == "Dairy & Eggs"
+        assert row.baseline_start <= row.baseline_end
+        assert row.current_start <= row.current_end
+        assert row.delta_pct is not None
+
     def test_spending_excludes_old_receipts(self, analytics, data_store):
         """Monthly spending excludes receipts from previous months."""
         old_date = date.today().replace(day=1) - timedelta(days=1)
@@ -178,6 +218,32 @@ class TestPriceComparison:
         assert result.cheapest_store == "Trader Joe's"
         assert result.cheapest_price == 4.99
         assert result.savings == 0.50
+
+    def test_time_window_metrics(self, analytics, data_store):
+        """Comparison includes 30d/90d averages and deltas."""
+        today = date.today()
+        data_store.update_price("Milk", "Giant", 4.00, today - timedelta(days=80))
+        data_store.update_price("Milk", "Giant", 5.00, today - timedelta(days=10))
+        data_store.update_price("Milk", "Giant", 6.00, today)
+        data_store.update_price("Milk", "TJ", 4.50, today)
+
+        result = analytics.price_comparison("Milk")
+        assert result is not None
+        assert result.average_price_30d is not None
+        assert result.average_price_90d is not None
+        assert result.delta_vs_30d_pct is not None
+        assert result.delta_vs_90d_pct is not None
+
+    def test_canonical_grouping(self, analytics, data_store):
+        """Variants of the same item are grouped by canonical identity."""
+        today = date.today()
+        data_store.update_price("Whole Milk 2%", "Giant", 5.49, today)
+        data_store.update_price("whole   milk", "TJ", 4.99, today)
+
+        result = analytics.price_comparison("Milk")
+        assert result is not None
+        assert set(result.stores.keys()) == {"Giant", "TJ"}
+        assert result.cheapest_store == "TJ"
 
     def test_case_insensitive_lookup(self, analytics, data_store):
         """Price comparison matches case-insensitively."""
@@ -326,6 +392,26 @@ class TestFrequencySummary:
         assert result.item_name == "Milk"
         assert result.average_days_between_purchases == 5.0
 
+    def test_canonical_frequency_merge(self, analytics, data_store):
+        """Frequency lookup merges canonical item variants."""
+        today = date.today()
+        data_store.save_frequency_data(
+            {
+                "Whole Milk 2%": FrequencyData(
+                    item_name="Whole Milk 2%",
+                    purchase_history=[PurchaseRecord(date=today - timedelta(days=8), quantity=1)],
+                ),
+                "whole milk": FrequencyData(
+                    item_name="whole milk",
+                    purchase_history=[PurchaseRecord(date=today - timedelta(days=2), quantity=1)],
+                ),
+            }
+        )
+
+        result = analytics.get_frequency_summary("Milk")
+        assert result is not None
+        assert len(result.purchase_history) == 2
+
 
 class TestCategoryGuessing:
     """Tests for category guessing heuristic."""
@@ -358,6 +444,16 @@ class TestCategoryGuessing:
 
     def test_unknown(self, analytics):
         assert analytics._guess_category("Detergent") == "Other"
+
+
+class TestItemNormalization:
+    """Tests for canonical item name normalization."""
+
+    def test_normalize_spacing_and_case(self):
+        assert normalize_item_name("  Whole   MILK ") == "milk"
+
+    def test_normalize_suffix_tokens(self):
+        assert normalize_item_name("Organic Bananas 16oz") == "bananas"
 
 
 class TestUpdateFrequencyFromReceipt:

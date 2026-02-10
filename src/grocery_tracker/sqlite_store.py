@@ -11,6 +11,7 @@ from datetime import date, datetime, time
 from pathlib import Path
 from uuid import UUID
 
+from .item_normalizer import normalize_item_name
 from .models import (
     BudgetTracking,
     CategoryBudget,
@@ -708,61 +709,41 @@ class SQLiteStore:
             PriceHistory if found, None otherwise
         """
         with self._get_connection() as conn:
-            if store:
-                rows = conn.execute(
-                    """
-                    SELECT * FROM price_history
-                    WHERE item_name = ? AND store = ?
-                    ORDER BY date
-                    """,
-                    (item_name, store),
-                ).fetchall()
+            rows = conn.execute(
+                """
+                SELECT * FROM price_history
+                ORDER BY date
+                """
+            ).fetchall()
 
-                if not rows:
-                    return None
+            canonical_target = normalize_item_name(item_name)
+            matched_rows = [
+                row
+                for row in rows
+                if normalize_item_name(row["item_name"]) == canonical_target
+                and (store is None or row["store"] == store)
+            ]
 
-                return PriceHistory(
-                    item_name=item_name,
-                    store=store,
-                    price_points=[
-                        PricePoint(
-                            date=date.fromisoformat(row["date"]),
-                            price=row["price"],
-                            unit=row["unit"],
-                            sale=bool(row["sale"]),
-                            receipt_id=UUID(row["receipt_id"]) if row["receipt_id"] else None,
-                        )
-                        for row in rows
-                    ],
+            if not matched_rows:
+                return None
+
+            first_name = matched_rows[0]["item_name"]
+            price_points = [
+                PricePoint(
+                    date=date.fromisoformat(row["date"]),
+                    price=row["price"],
+                    unit=row["unit"],
+                    sale=bool(row["sale"]),
+                    receipt_id=UUID(row["receipt_id"]) if row["receipt_id"] else None,
                 )
-            else:
-                # Combine all stores
-                rows = conn.execute(
-                    """
-                    SELECT * FROM price_history
-                    WHERE item_name = ?
-                    ORDER BY date
-                    """,
-                    (item_name,),
-                ).fetchall()
+                for row in matched_rows
+            ]
 
-                if not rows:
-                    return None
-
-                return PriceHistory(
-                    item_name=item_name,
-                    store="all",
-                    price_points=[
-                        PricePoint(
-                            date=date.fromisoformat(row["date"]),
-                            price=row["price"],
-                            unit=row["unit"],
-                            sale=bool(row["sale"]),
-                            receipt_id=UUID(row["receipt_id"]) if row["receipt_id"] else None,
-                        )
-                        for row in rows
-                    ],
-                )
+            return PriceHistory(
+                item_name=first_name,
+                store=store or "all",
+                price_points=price_points,
+            )
 
     # --- Frequency Data Operations ---
 

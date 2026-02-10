@@ -4,13 +4,17 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from .data_store import DataStore
+from .item_normalizer import canonical_item_display_name, normalize_item_name
 from .models import (
     BudgetTracking,
     CategoryBudget,
+    CategoryInflation,
     CategorySpending,
     FrequencyData,
     OutOfStockRecord,
     PriceComparison,
+    PricePoint,
+    PurchaseRecord,
     SpendingSummary,
     Suggestion,
     WasteReason,
@@ -82,6 +86,12 @@ class Analytics:
                 )
             )
 
+        category_inflation = self._calculate_category_inflation(
+            period_receipts=period_receipts,
+            start_date=start_date,
+            end_date=today,
+        )
+
         budget_remaining = None
         budget_percentage = None
         if budget_limit is not None and budget_limit > 0:
@@ -96,6 +106,7 @@ class Analytics:
             receipt_count=len(period_receipts),
             item_count=total_items,
             categories=categories,
+            category_inflation=category_inflation,
             budget_limit=budget_limit,
             budget_remaining=budget_remaining,
             budget_percentage=budget_percentage,
@@ -111,21 +122,31 @@ class Analytics:
             PriceComparison or None if no data
         """
         history = self.data_store.load_price_history()
+        canonical_target = normalize_item_name(item_name)
+        matched_keys = [
+            key for key in history if normalize_item_name(key) == canonical_target
+        ]
 
-        if item_name not in history:
-            # Try case-insensitive match
-            for key in history:
-                if key.lower() == item_name.lower():
-                    item_name = key
-                    break
-            else:
-                return None
+        if not matched_keys:
+            return None
 
-        stores: dict[str, float] = {}
-        for store_name, ph in history[item_name].items():
-            if ph.current_price is not None:
-                stores[store_name] = ph.current_price
+        display_name = self._choose_display_name(item_name, matched_keys)
 
+        latest_by_store: dict[str, PricePoint] = {}
+        all_price_points: list[PricePoint] = []
+        for key in matched_keys:
+            for store_name, ph in history[key].items():
+                all_price_points.extend(ph.price_points)
+                latest = self._latest_price_point(ph.price_points)
+                if latest is None:
+                    continue
+                if (
+                    store_name not in latest_by_store
+                    or latest.date > latest_by_store[store_name].date
+                ):
+                    latest_by_store[store_name] = latest
+
+        stores = {store: pp.price for store, pp in latest_by_store.items()}
         if not stores:
             return None
 
@@ -134,12 +155,27 @@ class Analytics:
         most_expensive = max(stores.values())
         savings = round(most_expensive - cheapest_price, 2) if len(stores) > 1 else 0.0
 
+        average_30d = self._average_for_window(all_price_points, 30)
+        average_90d = self._average_for_window(all_price_points, 90)
+
+        delta_30d = None
+        if average_30d and average_30d > 0:
+            delta_30d = round((cheapest_price - average_30d) / average_30d * 100, 1)
+
+        delta_90d = None
+        if average_90d and average_90d > 0:
+            delta_90d = round((cheapest_price - average_90d) / average_90d * 100, 1)
+
         return PriceComparison(
-            item_name=item_name,
+            item_name=display_name,
             stores=stores,
             cheapest_store=cheapest_store,
             cheapest_price=cheapest_price,
             savings=savings,
+            average_price_30d=average_30d,
+            average_price_90d=average_90d,
+            delta_vs_30d_pct=delta_30d,
+            delta_vs_90d_pct=delta_90d,
         )
 
     def get_suggestions(self) -> list[Suggestion]:
@@ -152,72 +188,95 @@ class Analytics:
 
         # Restock suggestions from frequency data
         frequency = self.data_store.load_frequency_data()
-        for item_name, freq in frequency.items():
-            avg = freq.average_days_between_purchases
-            days_since = freq.days_since_last_purchase
-            if avg is not None and days_since is not None:
-                if days_since >= avg:
-                    overdue = days_since - avg
-                    priority = "high" if overdue > avg * 0.5 else "medium"
+        grouped_frequency = self._group_frequency_data(frequency)
+        for canonical_name, grouped in grouped_frequency.items():
+            avg = self._average_days_between(grouped["purchase_history"])
+            last_purchase = self._last_purchase_date(grouped["purchase_history"])
+            if avg is None or last_purchase is None:
+                continue
+
+            days_since = (date.today() - last_purchase).days
+            if days_since < avg:
+                continue
+
+            overdue = days_since - avg
+            priority = "high" if overdue > avg * 0.5 else "medium"
+            suggestions.append(
+                Suggestion(
+                    type="restock",
+                    item_name=(
+                        grouped["display_name"]
+                        or canonical_item_display_name(canonical_name)
+                    ),
+                    message=(
+                        f"Usually buy every {avg:.0f} days, "
+                        f"last purchase {days_since} days ago"
+                    ),
+                    priority=priority,
+                    data={
+                        "average_interval": avg,
+                        "days_since": days_since,
+                        "last_purchased": last_purchase.isoformat(),
+                    },
+                )
+            )
+
+        # Price alert suggestions
+        history = self.data_store.load_price_history()
+        grouped_history = self._group_price_history(history)
+        for _, item_data in grouped_history.items():
+            display_name = item_data["display_name"]
+            for store_name, price_points in item_data["stores"].items():
+                if len(price_points) < 3:
+                    continue
+
+                latest = self._latest_price_point(price_points)
+                if latest is None:
+                    continue
+
+                avg_price = sum(pp.price for pp in price_points) / len(price_points)
+                if avg_price <= 0:
+                    continue
+
+                change_pct = (latest.price - avg_price) / avg_price * 100
+                if change_pct >= 15:
                     suggestions.append(
                         Suggestion(
-                            type="restock",
-                            item_name=item_name,
+                            type="price_alert",
+                            item_name=display_name,
                             message=(
-                                f"Usually buy every {avg:.0f} days, "
-                                f"last purchase {days_since} days ago"
+                                f"Price at {store_name} is "
+                                f"${latest.price:.2f} ({change_pct:+.0f}% vs avg ${avg_price:.2f})"
                             ),
-                            priority=priority,
+                            priority="medium",
                             data={
-                                "average_interval": avg,
-                                "days_since": days_since,
-                                "last_purchased": freq.last_purchased.isoformat()
-                                if freq.last_purchased
-                                else None,
+                                "store": store_name,
+                                "current_price": latest.price,
+                                "average_price": round(avg_price, 2),
+                                "change_percent": round(change_pct, 1),
                             },
                         )
                     )
 
-        # Price alert suggestions
-        history = self.data_store.load_price_history()
-        for item_name, stores in history.items():
-            for store_name, ph in stores.items():
-                if len(ph.price_points) >= 3:
-                    current = ph.current_price
-                    avg = ph.average_price
-                    if current is not None and avg is not None:
-                        change_pct = (current - avg) / avg * 100
-                        if change_pct >= 15:
-                            suggestions.append(
-                                Suggestion(
-                                    type="price_alert",
-                                    item_name=item_name,
-                                    message=(
-                                        f"Price at {store_name} is "
-                                        f"${current:.2f} ({change_pct:+.0f}% vs avg ${avg:.2f})"
-                                    ),
-                                    priority="medium",
-                                    data={
-                                        "store": store_name,
-                                        "current_price": current,
-                                        "average_price": avg,
-                                        "change_percent": round(change_pct, 1),
-                                    },
-                                )
-                            )
-
         # Out-of-stock pattern suggestions
         oos_records = self.data_store.load_out_of_stock()
         oos_counts: dict[tuple[str, str], int] = defaultdict(int)
+        oos_display_names: dict[str, str] = {}
         for record in oos_records:
-            oos_counts[(record.item_name, record.store)] += 1
+            canonical_item = normalize_item_name(record.item_name)
+            if canonical_item not in oos_display_names:
+                oos_display_names[canonical_item] = record.item_name
+            oos_counts[(canonical_item, record.store)] += 1
 
-        for (item_name, store), count in oos_counts.items():
+        for (canonical_item, store), count in oos_counts.items():
             if count >= 2:
                 suggestions.append(
                     Suggestion(
                         type="out_of_stock",
-                        item_name=item_name,
+                        item_name=oos_display_names.get(
+                            canonical_item,
+                            canonical_item_display_name(canonical_item),
+                        ),
                         message=f"Out of stock {count} times at {store}",
                         priority="low",
                         data={"store": store, "count": count},
@@ -266,7 +325,30 @@ class Analytics:
         Returns:
             FrequencyData or None
         """
-        return self.data_store.get_frequency(item_name)
+        frequency = self.data_store.load_frequency_data()
+        canonical_target = normalize_item_name(item_name)
+        matching = [
+            freq
+            for key, freq in frequency.items()
+            if normalize_item_name(key) == canonical_target
+        ]
+
+        if not matching:
+            return None
+
+        combined_history: list[PurchaseRecord] = []
+        category = "Other"
+        display_name = matching[0].item_name
+        for freq in matching:
+            combined_history.extend(freq.purchase_history)
+            if category == "Other" and freq.category != "Other":
+                category = freq.category
+
+        return FrequencyData(
+            item_name=display_name,
+            category=category,
+            purchase_history=sorted(combined_history, key=lambda p: p.date),
+        )
 
     def update_frequency_from_receipt(self, receipt) -> None:
         """Update frequency data from a processed receipt.
@@ -275,14 +357,134 @@ class Analytics:
             receipt: A Receipt object
         """
         for item in receipt.line_items:
+            canonical_name = canonical_item_display_name(item.item_name)
             cat = self._guess_category(item.item_name)
             self.data_store.update_frequency(
-                item_name=item.item_name,
+                item_name=canonical_name,
                 purchase_date=receipt.transaction_date,
                 quantity=item.quantity,
                 store=receipt.store_name,
                 category=cat,
             )
+
+    def _calculate_category_inflation(
+        self,
+        period_receipts: list,
+        start_date: date,
+        end_date: date,
+    ) -> list[CategoryInflation]:
+        """Calculate category-level price inflation within a period."""
+        total_days = (end_date - start_date).days
+        if total_days < 1 or not period_receipts:
+            return []
+
+        midpoint = start_date + timedelta(days=total_days // 2)
+        baseline_start = start_date
+        baseline_end = midpoint
+        current_start = min(end_date, midpoint + timedelta(days=1))
+        current_end = end_date
+
+        category_prices: dict[str, dict[str, list[float]]] = defaultdict(
+            lambda: {"baseline": [], "current": []}
+        )
+
+        for receipt in period_receipts:
+            period_key = "baseline" if receipt.transaction_date <= midpoint else "current"
+            for item in receipt.line_items:
+                if item.unit_price <= 0:
+                    continue
+                category = self._guess_category(item.item_name)
+                category_prices[category][period_key].append(item.unit_price)
+
+        inflation: list[CategoryInflation] = []
+        for category, windows in category_prices.items():
+            baseline_prices = windows["baseline"]
+            current_prices = windows["current"]
+            if not baseline_prices or not current_prices:
+                continue
+
+            baseline_avg = round(sum(baseline_prices) / len(baseline_prices), 2)
+            current_avg = round(sum(current_prices) / len(current_prices), 2)
+            delta_pct = None
+            if baseline_avg > 0:
+                delta_pct = round((current_avg - baseline_avg) / baseline_avg * 100, 1)
+
+            inflation.append(
+                CategoryInflation(
+                    category=category,
+                    baseline_start=baseline_start,
+                    baseline_end=baseline_end,
+                    current_start=current_start,
+                    current_end=current_end,
+                    baseline_avg_price=baseline_avg,
+                    current_avg_price=current_avg,
+                    delta_pct=delta_pct,
+                    baseline_samples=len(baseline_prices),
+                    current_samples=len(current_prices),
+                )
+            )
+
+        return sorted(
+            inflation,
+            key=lambda entry: abs(entry.delta_pct) if entry.delta_pct is not None else -1,
+            reverse=True,
+        )
+
+    def _group_frequency_data(self, frequency_data: dict[str, FrequencyData]) -> dict[str, dict]:
+        grouped: dict[str, dict] = {}
+        for item_name, freq in frequency_data.items():
+            canonical = normalize_item_name(item_name)
+            if canonical not in grouped:
+                grouped[canonical] = {
+                    "display_name": item_name,
+                    "purchase_history": [],
+                }
+            grouped[canonical]["purchase_history"].extend(freq.purchase_history)
+        return grouped
+
+    def _group_price_history(self, history_data: dict) -> dict[str, dict]:
+        grouped: dict[str, dict] = {}
+        for item_name, stores in history_data.items():
+            canonical = normalize_item_name(item_name)
+            if canonical not in grouped:
+                grouped[canonical] = {"display_name": item_name, "stores": defaultdict(list)}
+
+            for store_name, price_history in stores.items():
+                grouped[canonical]["stores"][store_name].extend(price_history.price_points)
+
+        return grouped
+
+    def _choose_display_name(self, queried_name: str, matched_keys: list[str]) -> str:
+        for key in matched_keys:
+            if key.lower() == queried_name.lower():
+                return key
+        return matched_keys[0]
+
+    def _latest_price_point(self, points: list[PricePoint]) -> PricePoint | None:
+        if not points:
+            return None
+        return max(points, key=lambda point: point.date)
+
+    def _average_for_window(self, points: list[PricePoint], days: int) -> float | None:
+        if not points:
+            return None
+        cutoff = date.today() - timedelta(days=days - 1)
+        window_prices = [pp.price for pp in points if pp.date >= cutoff]
+        if not window_prices:
+            return None
+        return round(sum(window_prices) / len(window_prices), 2)
+
+    def _average_days_between(self, purchases: list[PurchaseRecord]) -> float | None:
+        if len(purchases) < 2:
+            return None
+        dates = sorted(p.date for p in purchases)
+        intervals = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
+        return sum(intervals) / len(intervals)
+
+    def _last_purchase_date(self, purchases: list[PurchaseRecord]) -> date | None:
+        if not purchases:
+            return None
+        return max(p.date for p in purchases)
 
     def _guess_category(self, item_name: str) -> str:
         """Guess category from item name. Simple heuristic."""

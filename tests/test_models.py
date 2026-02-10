@@ -7,6 +7,7 @@ from grocery_tracker.models import (
     BudgetTracking,
     Category,
     CategoryBudget,
+    CategoryInflation,
     CategorySpending,
     FrequencyData,
     GroceryItem,
@@ -327,6 +328,7 @@ class TestSpendingSummary:
         assert summary.period == "monthly"
         assert summary.total_spending == 450.00
         assert summary.budget_limit is None
+        assert summary.category_inflation == []
 
     def test_create_with_budget(self):
         """Create summary with budget."""
@@ -346,6 +348,26 @@ class TestSpendingSummary:
         assert summary.budget_percentage == 90.0
 
 
+class TestCategoryInflation:
+    """Tests for CategoryInflation model."""
+
+    def test_create(self):
+        row = CategoryInflation(
+            category="Dairy & Eggs",
+            baseline_start=date(2026, 1, 1),
+            baseline_end=date(2026, 1, 15),
+            current_start=date(2026, 1, 16),
+            current_end=date(2026, 1, 31),
+            baseline_avg_price=4.0,
+            current_avg_price=5.0,
+            delta_pct=25.0,
+            baseline_samples=3,
+            current_samples=4,
+        )
+        assert row.category == "Dairy & Eggs"
+        assert row.delta_pct == 25.0
+
+
 class TestPriceComparison:
     """Tests for PriceComparison model."""
 
@@ -360,6 +382,19 @@ class TestPriceComparison:
         )
         assert comp.cheapest_store == "TJ"
         assert comp.savings == 0.50
+
+    def test_create_with_window_metrics(self):
+        """Create price comparison with windowed metric fields."""
+        comp = PriceComparison(
+            item_name="Milk",
+            stores={"Giant": 5.49},
+            average_price_30d=5.10,
+            average_price_90d=4.90,
+            delta_vs_30d_pct=7.6,
+            delta_vs_90d_pct=12.0,
+        )
+        assert comp.average_price_30d == 5.10
+        assert comp.delta_vs_90d_pct == 12.0
 
 
 class TestSuggestion:

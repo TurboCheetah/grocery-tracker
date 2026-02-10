@@ -1,7 +1,7 @@
 """Tests for Phase 2 CLI commands (stats, out-of-stock)."""
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from typer.testing import CliRunner
@@ -126,12 +126,17 @@ class TestStatsCompareCommand:
         """Compare command returns price comparison."""
         data_store.update_price("Milk", "Giant", 5.49, date.today())
         data_store.update_price("Milk", "TJ", 4.99, date.today())
+        data_store.update_price("Milk", "Giant", 4.79, date.today() - timedelta(days=40))
 
         result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "compare", "Milk"])
         assert result.exit_code == 0
         output = json.loads(result.stdout)
         assert output["success"] is True
         assert output["data"]["comparison"]["cheapest_store"] == "TJ"
+        assert "average_price_30d" in output["data"]["comparison"]
+        assert "average_price_90d" in output["data"]["comparison"]
+        assert "delta_vs_30d_pct" in output["data"]["comparison"]
+        assert "delta_vs_90d_pct" in output["data"]["comparison"]
 
 
 class TestStatsSuggestCommand:
