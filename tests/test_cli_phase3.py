@@ -303,6 +303,14 @@ class TestInventoryUseItUpPayload:
         assert payload["constraints"]["dietary_restrictions"] == ["vegetarian"]
         assert payload["constraints"]["allergens"] == ["peanuts"]
 
+    def test_payload_rich_mode(self, cli_data_dir):
+        """Payload command in Rich mode doesn't crash."""
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(cli_data_dir), "inventory", "use-it-up-payload", "--days", "3"],
+        )
+        assert result.exit_code == 0
+
 
 class TestInventoryLowStock:
     """Tests for low-stock command."""
@@ -686,6 +694,32 @@ class TestStatsBulk:
         output = json.loads(result.stdout)
         assert output["data"]["bulk_buying_analysis"]["comparable"] is False
         assert output["data"]["bulk_buying_analysis"]["comparison_status"] == "unit_mismatch"
+
+    def test_bulk_analysis_rich_mode(self, cli_data_dir):
+        """Bulk analysis in Rich mode doesn't crash."""
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(cli_data_dir),
+                "stats",
+                "bulk",
+                "Soda",
+                "--standard-qty",
+                "1",
+                "--standard-price",
+                "1.50",
+                "--standard-unit",
+                "count",
+                "--bulk-qty",
+                "12",
+                "--bulk-price",
+                "14.40",
+                "--bulk-unit",
+                "count",
+            ],
+        )
+        assert result.exit_code == 0
 
 
 # --- Preferences Commands ---

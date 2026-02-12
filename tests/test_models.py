@@ -240,9 +240,42 @@ class TestBulkModels:
         assert analysis.comparable is True
         assert analysis.recommended_option == "bulk"
 
+    def test_create_bulk_buying_analysis_non_comparable_defaults(self):
+        """Non-comparable analysis keeps optional defaults."""
+        analysis = BulkBuyingAnalysis(
+            item_name="Milk",
+            comparable=False,
+            comparison_status="unit_mismatch",
+            standard_option=BulkPackOption(
+                name="standard",
+                quantity=64,
+                unit="oz",
+                pack_price=4.99,
+            ),
+            bulk_option=BulkPackOption(
+                name="bulk",
+                quantity=1,
+                unit="count",
+                pack_price=4.99,
+            ),
+            break_even_recommendation=(
+                "Unable to compare pack options because units are not compatible."
+            ),
+        )
+        assert analysis.break_even_units is None
+        assert analysis.projected_monthly_savings is None
+        assert analysis.assumptions == []
+
 
 class TestRecipeHookModels:
     """Tests for recipe hook payload models."""
+
+    def test_create_recipe_hook_item_defaults(self):
+        """Recipe hook item applies expected defaults."""
+        item = RecipeHookItem(item_name="Milk", quantity=1)
+        assert item.category == Category.OTHER.value
+        assert item.location == InventoryLocation.PANTRY
+        assert item.priority_rank == 0
 
     def test_create_recipe_hook_payload(self):
         payload = RecipeHookPayload(

@@ -1110,7 +1110,13 @@ class Analytics:
                 "dietary_restrictions": sorted(set(prefs.dietary_restrictions)),
                 "allergens": sorted(set(prefs.allergens)),
                 "favorite_items": sorted(set(prefs.favorite_items)),
-                "brand_preferences": dict(sorted(prefs.brand_preferences.items())),
+                "brand_preferences": {
+                    item_name: [brand]
+                    for item_name, brand in sorted(
+                        prefs.brand_preferences.items(),
+                        key=lambda row: row[0],
+                    )
+                },
             }
 
         preferences = self.data_store.load_preferences()

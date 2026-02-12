@@ -247,6 +247,7 @@ class TestRecipeUseItUpPayload:
         data_store.save_user_preferences(
             UserPreferences(
                 user="Alice",
+                brand_preferences={"milk": "Organic Valley"},
                 dietary_restrictions=["vegetarian"],
                 allergens=["peanuts"],
             )
@@ -258,3 +259,4 @@ class TestRecipeUseItUpPayload:
         assert payload.expiring_items[0].priority_rank == 1
         assert payload.constraints["dietary_restrictions"] == ["vegetarian"]
         assert payload.constraints["allergens"] == ["peanuts"]
+        assert payload.constraints["brand_preferences"] == {"milk": ["Organic Valley"]}

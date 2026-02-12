@@ -573,6 +573,11 @@ Total: ${receipt["total"]:.2f}{savings_line}""",
             self.console.print(
                 f"Projected monthly savings: ${analysis.get('projected_monthly_savings', 0):.2f}"
             )
+        assumptions = analysis.get("assumptions", [])
+        if assumptions:
+            self.console.print("\n[dim]Assumptions:[/dim]")
+            for assumption in assumptions:
+                self.console.print(f"  - {assumption}")
 
     def _render_out_of_stock(self, data: dict) -> None:
         """Render out-of-stock records."""
@@ -656,6 +661,12 @@ Total: ${receipt["total"]:.2f}{savings_line}""",
                 self.console.print(f"  Dietary: {', '.join(dietary)}")
             if allergens:
                 self.console.print(f"  Allergens: {', '.join(allergens)}")
+
+        assumptions = payload.get("assumptions", [])
+        if assumptions:
+            self.console.print("\n[dim]Assumptions:[/dim]")
+            for assumption in assumptions:
+                self.console.print(f"  - {assumption}")
 
     def _render_inventory_item(self, data: dict) -> None:
         """Render a single inventory item."""

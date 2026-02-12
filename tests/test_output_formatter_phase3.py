@@ -284,6 +284,25 @@ class TestRenderBulkBuyingAnalysis:
         assert "Bulk Buying Analysis" in output
         assert "Soda" in output
         assert "bulk" in output.lower()
+        assert "Assumptions" in output
+
+    def test_render_bulk_buying_non_comparable(self):
+        """Renders non-comparable warning branch."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "bulk_buying_analysis": {
+                    "item_name": "Milk",
+                    "comparable": False,
+                    "break_even_recommendation": "Unable to compare pack options.",
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Comparison unavailable" in output
+        assert "Unable to compare pack options" in output
 
 
 class TestRenderRecipePayload:
@@ -319,3 +338,23 @@ class TestRenderRecipePayload:
         assert "Use-It-Up Recipe Payload" in output
         assert "Milk" in output
         assert "vegetarian" in output
+
+    def test_render_recipe_payload_assumptions(self):
+        """Renders assumptions when provided."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "recipe_payload": {
+                    "horizon_days": 3,
+                    "expiring_items": [],
+                    "constraints": {},
+                    "assumptions": [
+                        "Payload is intended for external recipe generation skills only."
+                    ],
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Assumptions" in output
