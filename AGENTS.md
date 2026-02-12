@@ -106,9 +106,14 @@ def add(item: str, quantity: float = 1.0):
 
 ## Agent Knowledge Index
 
-- Latest Sprint 2 implementation + handoff:
+- Latest merged implementation handoffs:
+  - `references/agent-handoffs/2026-02-12-sprint6-bulk-buying-recipe-hooks.md`
+  - `references/agent-handoffs/2026-02-12-post-merge-nitpick-followups.md`
+- Earlier sprint handoffs:
   - `references/agent-handoffs/2026-02-10-sprint2-complete.md`
-  - Includes: implemented scope, validation commands/results, Linear issue updates, and next steps.
+  - `references/agent-handoffs/2026-02-10-sprint3-route-planner.md`
+  - `references/agent-handoffs/2026-02-10-sprint4-savings-tracker.md`
+  - `references/agent-handoffs/2026-02-12-sprint5-seasonal-intelligence.md`
 
 ## Execution Notes
 
