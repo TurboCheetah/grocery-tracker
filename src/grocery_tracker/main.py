@@ -6,6 +6,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from typer.core import TyperGroup
 
 from .analytics import Analytics
 from .config import ConfigManager
@@ -16,8 +17,55 @@ from .models import InventoryLocation, ItemStatus, Priority, WasteReason
 from .output_formatter import OutputFormatter
 from .receipt_processor import ReceiptProcessor
 
+
+class FlexibleGlobalOptionGroup(TyperGroup):
+    """Allow selected global options to appear after subcommands."""
+
+    def parse_args(self, ctx: typer.Context, args: list[str]) -> list[str]:
+        normalized = self._normalize_selected_globals(args)
+        return super().parse_args(ctx, normalized)
+
+    @staticmethod
+    def _normalize_selected_globals(args: list[str]) -> list[str]:
+        global_args: list[str] = []
+        passthrough_args: list[str] = []
+
+        i = 0
+        while i < len(args):
+            token = args[i]
+
+            if token == "--":
+                passthrough_args.extend(args[i:])
+                break
+
+            if token == "--json":
+                global_args.append(token)
+                i += 1
+                continue
+
+            if token == "--data-dir":
+                global_args.append(token)
+                if i + 1 < len(args):
+                    global_args.append(args[i + 1])
+                    i += 2
+                else:
+                    i += 1
+                continue
+
+            if token.startswith("--data-dir="):
+                global_args.append(token)
+                i += 1
+                continue
+
+            passthrough_args.append(token)
+            i += 1
+
+        return global_args + passthrough_args
+
+
 app = typer.Typer(
     name="grocery",
+    cls=FlexibleGlobalOptionGroup,
     help=(
         "Intelligent grocery list and inventory management.\n\n"
         "Global options: --json and --data-dir."
