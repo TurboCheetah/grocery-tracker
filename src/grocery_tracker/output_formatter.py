@@ -199,6 +199,16 @@ Total: ${receipt["total"]:.2f}{savings_line}""",
 
         for item in receipt["line_items"]:
             line_savings = item.get("discount_amount", 0.0) + item.get("coupon_amount", 0.0)
+            if line_savings <= 0:
+                regular_unit = item.get("regular_unit_price")
+                unit_price = item.get("unit_price")
+                quantity = item.get("quantity", 1) or 1
+                if (
+                    regular_unit is not None
+                    and unit_price is not None
+                    and regular_unit > unit_price
+                ):
+                    line_savings = (regular_unit - unit_price) * quantity
             table.add_row(
                 item["item_name"],
                 str(item["quantity"]),

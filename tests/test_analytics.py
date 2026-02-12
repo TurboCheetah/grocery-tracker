@@ -649,6 +649,37 @@ class TestShoppingRoutePlanner:
         assert route.unassigned_items[0].item_name == "Paprika"
         assert route.unassigned_items[0].assignment_source == "unassigned"
 
+    def test_route_reuses_loaded_data_for_recommendations(self, analytics, data_store, monkeypatch):
+        """Route planning loads price and out-of-stock data once for batch recommendations."""
+        manager = ListManager(data_store=data_store)
+        manager.add_item(name="Milk")
+        manager.add_item(name="Eggs")
+
+        today = date.today()
+        data_store.update_price("Milk", "TJ", 4.79, today - timedelta(days=1))
+        data_store.update_price("Eggs", "TJ", 3.49, today - timedelta(days=1))
+
+        load_calls = {"price_history": 0, "out_of_stock": 0}
+        original_load_price_history = data_store.load_price_history
+        original_load_out_of_stock = data_store.load_out_of_stock
+
+        def tracked_load_price_history():
+            load_calls["price_history"] += 1
+            return original_load_price_history()
+
+        def tracked_load_out_of_stock():
+            load_calls["out_of_stock"] += 1
+            return original_load_out_of_stock()
+
+        monkeypatch.setattr(data_store, "load_price_history", tracked_load_price_history)
+        monkeypatch.setattr(data_store, "load_out_of_stock", tracked_load_out_of_stock)
+
+        route = analytics.plan_shopping_route()
+
+        assert route.total_items == 2
+        assert load_calls["price_history"] == 1
+        assert load_calls["out_of_stock"] == 1
+
 
 class TestFrequencySummary:
     """Tests for frequency summary."""
