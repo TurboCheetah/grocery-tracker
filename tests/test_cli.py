@@ -781,7 +781,7 @@ class TestHelpCommand:
         assert result.exit_code == 0
         assert "grocery" in result.stdout.lower()
         assert "add" in result.stdout
-        expected = result.stdout
+        expected = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
         assert re.search(r"\B--?json\b", expected)
         assert re.search(r"\B--?data-dir\b", expected)
 
