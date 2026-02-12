@@ -322,6 +322,26 @@ class SavingsSummary(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
 
 
+class SeasonalMonthStat(BaseModel):
+    """Seasonal aggregates for a calendar month."""
+
+    month: int = Field(ge=1, le=12)  # 1-12
+    purchase_count: int
+    average_price: float | None = None
+
+
+class SeasonalPurchasePattern(BaseModel):
+    """Seasonal purchase and pricing pattern for an item."""
+
+    item_name: str
+    sample_size: int = 0
+    observed_months: int = 0
+    peak_purchase_months: list[int] = Field(default_factory=list)
+    low_purchase_months: list[int] = Field(default_factory=list)
+    monthly_stats: list[SeasonalMonthStat] = Field(default_factory=list)
+    confidence: str = "low"
+
+
 class PriceComparison(BaseModel):
     """Price comparison for an item across stores."""
 
@@ -339,7 +359,7 @@ class PriceComparison(BaseModel):
 class Suggestion(BaseModel):
     """A smart shopping suggestion."""
 
-    type: str  # "restock", "price_alert", "out_of_stock"
+    type: str  # "restock", "price_alert", "seasonal_optimization", "out_of_stock"
     item_name: str
     message: str
     priority: str = "medium"  # high, medium, low

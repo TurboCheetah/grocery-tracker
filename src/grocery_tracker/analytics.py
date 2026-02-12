@@ -23,6 +23,8 @@ from .models import (
     SavingsContributor,
     SavingsRecord,
     SavingsSummary,
+    SeasonalMonthStat,
+    SeasonalPurchasePattern,
     ShoppingRoute,
     SpendingSummary,
     StorePreferenceScore,
@@ -205,6 +207,22 @@ class Analytics:
             delta_vs_90d_pct=delta_90d,
         )
 
+    def seasonal_purchase_pattern(self, item_name: str) -> SeasonalPurchasePattern | None:
+        """Build month-by-month seasonal purchase pattern for an item."""
+        history = self.data_store.load_price_history()
+        canonical_target = normalize_item_name(item_name)
+        matched_keys = [key for key in history if normalize_item_name(key) == canonical_target]
+        if not matched_keys:
+            return None
+
+        display_name = self._choose_display_name(item_name, matched_keys)
+        all_points = []
+        for key in matched_keys:
+            for price_history in history[key].values():
+                all_points.extend(price_history.price_points)
+
+        return self._build_seasonal_purchase_pattern(display_name, all_points)
+
     def get_suggestions(self) -> list[Suggestion]:
         """Generate smart shopping suggestions.
 
@@ -282,6 +300,73 @@ class Analytics:
                             },
                         )
                     )
+
+        # Seasonal price context suggestions
+        for _, item_data in grouped_history.items():
+            display_name = item_data["display_name"]
+            all_points = [
+                pp for points in item_data["stores"].values() for pp in points if pp.price > 0
+            ]
+            pattern = self._build_seasonal_purchase_pattern(display_name, all_points)
+            if pattern is None or pattern.confidence == "low" or len(pattern.monthly_stats) < 2:
+                continue
+
+            latest = self._latest_price_point(all_points)
+            if latest is None:
+                continue
+
+            month_price_map = {
+                stat.month: stat.average_price
+                for stat in pattern.monthly_stats
+                if stat.average_price is not None and stat.average_price > 0
+            }
+            if len(month_price_map) < 2:
+                continue
+
+            baseline_price = min(month_price_map.values())
+            if baseline_price <= 0:
+                continue
+
+            baseline_months = sorted(
+                month for month, avg_price in month_price_map.items() if avg_price == baseline_price
+            )
+            current_month = latest.date.month
+            ratio = latest.price / baseline_price
+            if ratio < 1.25:
+                continue
+
+            priority = "high" if ratio >= 1.75 else "medium"
+            baseline_month_names = ", ".join(self._month_name(m) for m in baseline_months)
+            recommendation_reason = (
+                f"{self._month_name(current_month)} pricing is {ratio:.1f}x the seasonal baseline."
+            )
+
+            suggestions.append(
+                Suggestion(
+                    type="seasonal_optimization",
+                    item_name=display_name,
+                    message=(
+                        f"Current price ${latest.price:.2f} is {ratio:.1f}x seasonal baseline "
+                        f"${baseline_price:.2f}; best value in {baseline_month_names}"
+                    ),
+                    priority=priority,
+                    data={
+                        "baseline": {
+                            "average_price": round(baseline_price, 2),
+                            "months": baseline_months,
+                            "in_season_months": pattern.peak_purchase_months,
+                            "confidence": pattern.confidence,
+                        },
+                        "current_context": {
+                            "month": current_month,
+                            "month_average_price": month_price_map.get(current_month),
+                            "latest_observed_price": latest.price,
+                            "latest_observed_date": latest.date.isoformat(),
+                        },
+                        "recommendation_reason": recommendation_reason,
+                    },
+                )
+            )
 
         # Out-of-stock pattern suggestions
         oos_records = self.data_store.load_out_of_stock()
@@ -864,6 +949,71 @@ class Analytics:
                 grouped[canonical]["stores"][store_name].extend(price_history.price_points)
 
         return grouped
+
+    def _build_seasonal_purchase_pattern(
+        self,
+        item_name: str,
+        price_points: list[PricePoint],
+    ) -> SeasonalPurchasePattern | None:
+        if not price_points:
+            return None
+
+        month_prices: dict[int, list[float]] = defaultdict(list)
+        for point in price_points:
+            if point.price <= 0:
+                continue
+            month_prices[point.date.month].append(point.price)
+
+        if not month_prices:
+            return None
+
+        monthly_stats = [
+            SeasonalMonthStat(
+                month=month,
+                purchase_count=len(prices),
+                average_price=round(sum(prices) / len(prices), 2),
+            )
+            for month, prices in sorted(month_prices.items())
+        ]
+
+        sample_size = sum(stat.purchase_count for stat in monthly_stats)
+        observed_months = len(monthly_stats)
+        confidence = self._seasonal_confidence(sample_size, observed_months)
+
+        peak_purchase_months: list[int] = []
+        low_purchase_months: list[int] = []
+        if confidence != "low" and observed_months >= 3:
+            max_count = max(stat.purchase_count for stat in monthly_stats)
+            min_count = min(stat.purchase_count for stat in monthly_stats)
+            if max_count > min_count:
+                peak_purchase_months = [
+                    stat.month for stat in monthly_stats if stat.purchase_count == max_count
+                ]
+                low_purchase_months = [
+                    stat.month for stat in monthly_stats if stat.purchase_count == min_count
+                ]
+
+        return SeasonalPurchasePattern(
+            item_name=item_name,
+            sample_size=sample_size,
+            observed_months=observed_months,
+            peak_purchase_months=peak_purchase_months,
+            low_purchase_months=low_purchase_months,
+            monthly_stats=monthly_stats,
+            confidence=confidence,
+        )
+
+    @staticmethod
+    def _seasonal_confidence(sample_size: int, observed_months: int) -> str:
+        if sample_size >= 24 and observed_months >= 6:
+            return "high"
+        if sample_size >= 12 and observed_months >= 4:
+            return "medium"
+        return "low"
+
+    @staticmethod
+    def _month_name(month: int) -> str:
+        return date(2000, month, 1).strftime("%B")
 
     def _choose_display_name(self, queried_name: str, matched_keys: list[str]) -> str:
         for key in matched_keys:
