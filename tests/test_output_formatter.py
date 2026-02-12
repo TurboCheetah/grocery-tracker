@@ -354,6 +354,38 @@ class TestOutputFormatterRich:
         assert "Milk" in output
         assert "$2.00" in output
 
+    def test_render_receipt_inferred_savings_zero_quantity(self):
+        """Does not infer non-zero savings for zero-quantity line items."""
+        console = Console(file=StringIO(), force_terminal=True, width=80)
+        formatter = OutputFormatter(json_mode=False)
+        formatter.console = console
+
+        formatter.output(
+            {
+                "success": True,
+                "data": {
+                    "receipt": {
+                        "store_name": "Giant Food",
+                        "transaction_date": "2024-01-15",
+                        "transaction_time": "",
+                        "line_items": [
+                            {
+                                "item_name": "Milk",
+                                "quantity": 0,
+                                "unit_price": 4.99,
+                                "regular_unit_price": 5.99,
+                                "total_price": 0.00,
+                            },
+                        ],
+                        "total": 0.00,
+                    }
+                },
+            }
+        )
+        output = strip_ansi(console.file.getvalue())
+        assert "Milk" in output
+        assert "$1.00" not in output
+
     def test_render_price_history(self):
         """Renders price history."""
         console = Console(file=StringIO(), force_terminal=True, width=80)
