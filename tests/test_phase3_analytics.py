@@ -244,10 +244,11 @@ class TestRecipeUseItUpPayload:
                 ),
             ]
         )
+        stored_brand_preferences = {"milk": "Organic Valley"}
         data_store.save_user_preferences(
             UserPreferences(
                 user="Alice",
-                brand_preferences={"milk": "Organic Valley"},
+                brand_preferences=stored_brand_preferences,
                 dietary_restrictions=["vegetarian"],
                 allergens=["peanuts"],
             )
@@ -259,4 +260,8 @@ class TestRecipeUseItUpPayload:
         assert payload.expiring_items[0].priority_rank == 1
         assert payload.constraints["dietary_restrictions"] == ["vegetarian"]
         assert payload.constraints["allergens"] == ["peanuts"]
-        assert payload.constraints["brand_preferences"] == {"milk": ["Organic Valley"]}
+        # Preferences are stored as singular strings and normalized
+        # to list form in payload constraints.
+        assert payload.constraints["brand_preferences"] == {
+            "milk": [stored_brand_preferences["milk"]]
+        }

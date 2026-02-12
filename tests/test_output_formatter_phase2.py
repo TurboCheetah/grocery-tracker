@@ -355,6 +355,26 @@ class TestRenderRecommendation:
 class TestRenderRoute:
     """Tests for route rendering."""
 
+    def test_render_route_empty(self):
+        """Renders empty route summary and zero-stop state."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "route": {
+                    "total_items": 0,
+                    "total_estimated_cost": 0.0,
+                    "stops": [],
+                    "unassigned_items": [],
+                    "rationale": [],
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Shopping Route" in output
+        assert "No store stops available" in output
+
     def test_render_route_with_stops(self):
         """Renders shopping route table and item details."""
         fmt = OutputFormatter(json_mode=False)

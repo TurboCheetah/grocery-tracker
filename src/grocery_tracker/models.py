@@ -290,6 +290,13 @@ class SavingsContributor(BaseModel):
     record_count: int
 
 
+class SavingsSource(str, Enum):
+    """Source of a savings record."""
+
+    LINE_ITEM_DISCOUNT = "line_item_discount"
+    RECEIPT_DISCOUNT = "receipt_discount"
+
+
 class SavingsRecord(BaseModel):
     """A persisted savings record derived from receipt discounts."""
 
@@ -299,8 +306,8 @@ class SavingsRecord(BaseModel):
     store: str
     item_name: str
     category: str = Category.OTHER.value
-    savings_amount: float
-    source: str = "line_item_discount"
+    savings_amount: float = Field(ge=0)
+    source: SavingsSource = SavingsSource.LINE_ITEM_DISCOUNT
     quantity: float = 1.0
     paid_unit_price: float | None = None
     regular_unit_price: float | None = None
@@ -400,6 +407,16 @@ class ItemRecommendation(BaseModel):
     rationale: list[str] = Field(default_factory=list)
 
 
+class RouteAssignmentSource(str, Enum):
+    """Source used to assign an item to a route stop."""
+
+    LIST_PREFERENCE = "list_preference"
+    RECOMMENDATION = "recommendation"
+    PRICE_HISTORY = "price_history"
+    UNASSIGNED = "unassigned"
+    UNKNOWN = "unknown"
+
+
 class RouteItemAssignment(BaseModel):
     """Planned store assignment for a grocery list item."""
 
@@ -409,7 +426,7 @@ class RouteItemAssignment(BaseModel):
     priority: Priority = Priority.MEDIUM
     assigned_store: str | None = None
     estimated_price: float | None = None
-    assignment_source: str = "unknown"
+    assignment_source: RouteAssignmentSource = RouteAssignmentSource.UNKNOWN
     rationale: list[str] = Field(default_factory=list)
 
 

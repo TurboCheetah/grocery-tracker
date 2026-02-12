@@ -566,17 +566,21 @@ class Analytics:
         self,
         item_name: str,
         min_confidence: float = 0.45,
+        history: dict | None = None,
+        oos_records: list[OutOfStockRecord] | None = None,
     ) -> ItemRecommendation | None:
         """Recommend the best store for an item based on history quality.
 
         Args:
             item_name: Item to recommend a store for
             min_confidence: Minimum confidence score required to return a recommendation
+            history: Optional preloaded price history map for batch operations
+            oos_records: Optional preloaded out-of-stock records for batch operations
 
         Returns:
             ItemRecommendation when confidence threshold is met, otherwise None.
         """
-        history = self.data_store.load_price_history()
+        history = history if history is not None else self.data_store.load_price_history()
         canonical_target = normalize_item_name(item_name)
         matched_keys = [key for key in history if normalize_item_name(key) == canonical_target]
         if not matched_keys:
@@ -590,7 +594,9 @@ class Analytics:
         if not store_points:
             return None
 
-        oos_records = self.data_store.load_out_of_stock()
+        oos_records = (
+            oos_records if oos_records is not None else self.data_store.load_out_of_stock()
+        )
         oos_count_by_store: dict[str, int] = defaultdict(int)
         for record in oos_records:
             if normalize_item_name(record.item_name) == canonical_target:
@@ -734,7 +740,9 @@ class Analytics:
                 rationale=["No pending grocery list items to route."],
             )
 
-        grouped_history = self._group_price_history(self.data_store.load_price_history())
+        history = self.data_store.load_price_history()
+        grouped_history = self._group_price_history(history)
+        oos_records = self.data_store.load_out_of_stock()
 
         store_assignments: dict[str, list[RouteItemAssignment]] = defaultdict(list)
         unassigned_items: list[RouteItemAssignment] = []
@@ -756,7 +764,12 @@ class Analytics:
                         grouped_history=grouped_history,
                     )
             else:
-                recommendation = self.recommend_item(item.name, min_confidence=0.0)
+                recommendation = self.recommend_item(
+                    item.name,
+                    min_confidence=0.0,
+                    history=history,
+                    oos_records=oos_records,
+                )
                 if recommendation and recommendation.recommended_store:
                     assigned_store = recommendation.recommended_store
                     assignment_source = "recommendation"

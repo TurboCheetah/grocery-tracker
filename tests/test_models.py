@@ -3,6 +3,9 @@
 from datetime import date, datetime, timedelta
 from uuid import UUID
 
+import pytest
+from pydantic import ValidationError
+
 from grocery_tracker.models import (
     BudgetTracking,
     BulkBuyingAnalysis,
@@ -167,6 +170,17 @@ class TestSavingsModels:
         )
         assert summary.total_savings == 5.0
         assert summary.top_items[0].name == "Milk"
+
+    def test_reject_negative_savings_amount(self):
+        """Savings record enforces non-negative savings."""
+        with pytest.raises(ValidationError):
+            SavingsRecord(
+                receipt_id=UUID("11111111-1111-1111-1111-111111111111"),
+                transaction_date=date.today(),
+                store="Giant",
+                item_name="Milk",
+                savings_amount=-0.01,
+            )
 
 
 class TestSeasonalModels:
