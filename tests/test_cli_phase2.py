@@ -336,6 +336,12 @@ class TestStatsSavingsCommand:
         assert output["data"]["savings"]["receipt_count"] == 1
         assert len(output["data"]["savings"]["top_items"]) >= 1
 
+    def test_savings_rich_mode_renders_summary(self, cli_data_dir):
+        """Savings command in Rich mode renders summary details."""
+        result = runner.invoke(app, ["--data-dir", str(cli_data_dir), "stats", "savings"])
+        assert result.exit_code == 0
+        assert "Savings Summary" in result.stdout
+
 
 class TestOutOfStockReportCommand:
     """Tests for grocery out-of-stock report command."""

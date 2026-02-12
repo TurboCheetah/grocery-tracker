@@ -798,6 +798,8 @@ Total: ${receipt["total"]:.2f}{savings_line}""",
             print(json.dumps(output, cls=JSONEncoder))
         else:
             self.console.print(f"[green]\u2713[/green] {message}")
+            if data:
+                self._output_rich({"success": True, "data": data}, "")
 
     def warning(self, message: str) -> None:
         """Output warning message.
