@@ -602,7 +602,7 @@ def stats_savings(
                 "savings": summary.model_dump(),
             },
         }
-        formatter.output(output_data, f"Savings summary ({period})")
+        formatter.success(f"Savings summary ({period})", output_data["data"])
     except Exception as e:
         formatter.error(str(e))
         raise typer.Exit(code=1)
