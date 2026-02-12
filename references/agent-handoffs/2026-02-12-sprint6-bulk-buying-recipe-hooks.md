@@ -1,12 +1,13 @@
-# Sprint 6 Bulk Buying + Recipe Hook Handoff (GT-601/602)
+# Sprint 6 Bulk Buying + Recipe Hook Handoff (TUR-20/TUR-21)
 
 Date: 2026-02-12  
-Branch: `codex/sprint-6-bulk-buying-recipe-hooks`
+Branch: `codex/sprint-6-bulk-buying-recipe-hooks` (tracks `TUR-20`/`TUR-21`)
+Mapping: `GT-601` -> `TUR-20` and `GT-602` -> `TUR-21`.
 
 ## Implemented
 
-- GT-601 bulk buying value analysis with unit normalization, break-even guidance, and monthly savings projection
-- GT-602 recipe/use-it-up payload hooks for external skill-layer recipe generation
+- TUR-20 (GT-601) bulk buying value analysis with unit normalization, break-even guidance, and monthly savings projection
+- TUR-21 (GT-602) recipe/use-it-up payload hooks for external skill-layer recipe generation
 
 ## Runtime Files Updated
 
@@ -60,5 +61,4 @@ Branch: `codex/sprint-6-bulk-buying-recipe-hooks`
 
 ## Linear Status
 
-- `TUR-20` / `TUR-21`: implementation complete in this branch.
-- Issue state/comment updates in Linear were not applied in this pass.
+- `TUR-20` (`GT-601`) / `TUR-21` (`GT-602`): implementation complete in this branch.

@@ -1028,7 +1028,8 @@ class Analytics:
             reverse=True,
         )
 
-    def _normalize_unit(self, unit: str | None) -> tuple[str, float, str] | None:
+    @staticmethod
+    def _normalize_unit(unit: str | None) -> tuple[str, float, str] | None:
         """Normalize units to a comparable family and base unit."""
         if not unit:
             return None
