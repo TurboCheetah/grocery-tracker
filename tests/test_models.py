@@ -26,6 +26,9 @@ from grocery_tracker.models import (
     Receipt,
     RouteItemAssignment,
     RouteStoreStop,
+    SavingsContributor,
+    SavingsRecord,
+    SavingsSummary,
     ShoppingRoute,
     SpendingSummary,
     StorePreferenceScore,
@@ -93,6 +96,10 @@ class TestLineItem:
         assert item.unit_price == 0.59
         assert item.total_price == 1.77
         assert item.matched_list_item_id is None
+        assert item.sale is False
+        assert item.discount_amount == 0.0
+        assert item.coupon_amount == 0.0
+        assert item.regular_unit_price is None
 
 
 class TestReceipt:
@@ -109,12 +116,51 @@ class TestReceipt:
             ],
             subtotal=11.97,
             tax=0.72,
+            discount_total=1.25,
+            coupon_total=0.5,
             total=12.69,
         )
         assert receipt.store_name == "Giant Food"
         assert len(receipt.line_items) == 2
         assert receipt.total == 12.69
+        assert receipt.discount_total == 1.25
+        assert receipt.coupon_total == 0.5
         assert isinstance(receipt.id, UUID)
+
+
+class TestSavingsModels:
+    """Tests for savings models."""
+
+    def test_create_savings_record(self):
+        """Create a savings record."""
+        record = SavingsRecord(
+            receipt_id=UUID("11111111-1111-1111-1111-111111111111"),
+            transaction_date=date.today(),
+            store="Giant",
+            item_name="Milk",
+            category="Dairy & Eggs",
+            savings_amount=1.25,
+            source="line_item_discount",
+            quantity=1.0,
+            paid_unit_price=4.99,
+            regular_unit_price=6.24,
+        )
+        assert record.savings_amount == 1.25
+        assert record.store == "Giant"
+
+    def test_create_savings_summary(self):
+        """Create a savings summary."""
+        summary = SavingsSummary(
+            period="monthly",
+            start_date=date.today(),
+            end_date=date.today(),
+            total_savings=5.0,
+            receipt_count=2,
+            record_count=3,
+            top_items=[SavingsContributor(name="Milk", total_savings=3.0, record_count=2)],
+        )
+        assert summary.total_savings == 5.0
+        assert summary.top_items[0].name == "Milk"
 
 
 class TestPriceHistory:

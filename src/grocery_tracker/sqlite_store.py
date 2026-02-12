@@ -28,6 +28,7 @@ from .models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    SavingsRecord,
     UserPreferences,
     WasteReason,
     WasteRecord,
@@ -170,6 +171,8 @@ class SQLiteStore:
                     purchased_by TEXT,
                     subtotal REAL NOT NULL,
                     tax REAL NOT NULL DEFAULT 0.0,
+                    discount_total REAL NOT NULL DEFAULT 0.0,
+                    coupon_total REAL NOT NULL DEFAULT 0.0,
                     total REAL NOT NULL,
                     payment_method TEXT,
                     receipt_image_path TEXT,
@@ -185,8 +188,30 @@ class SQLiteStore:
                     quantity REAL NOT NULL DEFAULT 1.0,
                     unit_price REAL NOT NULL,
                     total_price REAL NOT NULL,
+                    sale INTEGER NOT NULL DEFAULT 0,
+                    discount_amount REAL NOT NULL DEFAULT 0.0,
+                    coupon_amount REAL NOT NULL DEFAULT 0.0,
+                    regular_unit_price REAL,
                     matched_list_item_id TEXT REFERENCES grocery_items(id)
                 );
+
+                -- Savings records
+                CREATE TABLE IF NOT EXISTS savings_records (
+                    id TEXT PRIMARY KEY,
+                    receipt_id TEXT NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+                    transaction_date TEXT NOT NULL,
+                    store TEXT NOT NULL,
+                    item_name TEXT NOT NULL,
+                    category TEXT NOT NULL DEFAULT 'Other',
+                    savings_amount REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    quantity REAL NOT NULL DEFAULT 1.0,
+                    paid_unit_price REAL,
+                    regular_unit_price REAL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_savings_records_date
+                    ON savings_records(transaction_date);
 
                 -- Price history
                 CREATE TABLE IF NOT EXISTS price_history (
@@ -292,6 +317,20 @@ class SQLiteStore:
                 -- Record schema version
                 INSERT OR IGNORE INTO schema_version (version) VALUES (1);
             """)
+            self._ensure_column(conn, "receipts", "discount_total REAL NOT NULL DEFAULT 0.0")
+            self._ensure_column(conn, "receipts", "coupon_total REAL NOT NULL DEFAULT 0.0")
+            self._ensure_column(conn, "receipt_items", "sale INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column(conn, "receipt_items", "discount_amount REAL NOT NULL DEFAULT 0.0")
+            self._ensure_column(conn, "receipt_items", "coupon_amount REAL NOT NULL DEFAULT 0.0")
+            self._ensure_column(conn, "receipt_items", "regular_unit_price REAL")
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column_def: str) -> None:
+        """Add a missing column for backwards-compatible schema upgrades."""
+        column_name = column_def.split()[0]
+        table_info = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        existing_columns = {row["name"] for row in table_info}
+        if column_name not in existing_columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
 
     # --- Grocery List Operations ---
 
@@ -471,9 +510,10 @@ class SQLiteStore:
                 """
                 INSERT OR REPLACE INTO receipts
                 (id, store_name, store_location, transaction_date, transaction_time,
-                 purchased_by, subtotal, tax, total, payment_method, receipt_image_path,
+                 purchased_by, subtotal, tax, discount_total, coupon_total,
+                 total, payment_method, receipt_image_path,
                  raw_ocr_text, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(receipt.id),
@@ -484,6 +524,8 @@ class SQLiteStore:
                     receipt.purchased_by,
                     receipt.subtotal,
                     receipt.tax,
+                    receipt.discount_total,
+                    receipt.coupon_total,
                     receipt.total,
                     receipt.payment_method,
                     receipt.receipt_image_path,
@@ -503,8 +545,19 @@ class SQLiteStore:
                 conn.execute(
                     """
                     INSERT INTO receipt_items
-                    (receipt_id, item_name, quantity, unit_price, total_price, matched_list_item_id)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    (
+                        receipt_id,
+                        item_name,
+                        quantity,
+                        unit_price,
+                        total_price,
+                        sale,
+                        discount_amount,
+                        coupon_amount,
+                        regular_unit_price,
+                        matched_list_item_id
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(receipt.id),
@@ -512,6 +565,10 @@ class SQLiteStore:
                         item.quantity,
                         item.unit_price,
                         item.total_price,
+                        1 if item.sale else 0,
+                        item.discount_amount,
+                        item.coupon_amount,
+                        item.regular_unit_price,
                         str(item.matched_list_item_id) if item.matched_list_item_id else None,
                     ),
                 )
@@ -548,6 +605,10 @@ class SQLiteStore:
                     quantity=item_row["quantity"],
                     unit_price=item_row["unit_price"],
                     total_price=item_row["total_price"],
+                    sale=bool(item_row["sale"]),
+                    discount_amount=item_row["discount_amount"],
+                    coupon_amount=item_row["coupon_amount"],
+                    regular_unit_price=item_row["regular_unit_price"],
                     matched_list_item_id=UUID(item_row["matched_list_item_id"])
                     if item_row["matched_list_item_id"]
                     else None,
@@ -567,6 +628,8 @@ class SQLiteStore:
                 line_items=line_items,
                 subtotal=row["subtotal"],
                 tax=row["tax"],
+                discount_total=row["discount_total"],
+                coupon_total=row["coupon_total"],
                 total=row["total"],
                 payment_method=row["payment_method"],
                 receipt_image_path=row["receipt_image_path"],
@@ -590,6 +653,109 @@ class SQLiteStore:
                     receipts.append(receipt)
 
             return receipts
+
+    def load_savings_records(self) -> list[SavingsRecord]:
+        """Load persisted savings records."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM savings_records
+                ORDER BY transaction_date DESC, id ASC
+                """
+            ).fetchall()
+
+            return [
+                SavingsRecord(
+                    id=UUID(row["id"]),
+                    receipt_id=UUID(row["receipt_id"]),
+                    transaction_date=date.fromisoformat(row["transaction_date"]),
+                    store=row["store"],
+                    item_name=row["item_name"],
+                    category=row["category"],
+                    savings_amount=row["savings_amount"],
+                    source=row["source"],
+                    quantity=row["quantity"],
+                    paid_unit_price=row["paid_unit_price"],
+                    regular_unit_price=row["regular_unit_price"],
+                )
+                for row in rows
+            ]
+
+    def save_savings_records(self, records: list[SavingsRecord]) -> None:
+        """Replace all savings records."""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM savings_records")
+            for record in records:
+                conn.execute(
+                    """
+                    INSERT INTO savings_records
+                    (
+                        id,
+                        receipt_id,
+                        transaction_date,
+                        store,
+                        item_name,
+                        category,
+                        savings_amount,
+                        source,
+                        quantity,
+                        paid_unit_price,
+                        regular_unit_price
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(record.id),
+                        str(record.receipt_id),
+                        record.transaction_date.isoformat(),
+                        record.store,
+                        record.item_name,
+                        record.category,
+                        record.savings_amount,
+                        record.source,
+                        record.quantity,
+                        record.paid_unit_price,
+                        record.regular_unit_price,
+                    ),
+                )
+
+    def add_savings_record(self, record: SavingsRecord) -> UUID:
+        """Append one savings record."""
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO savings_records
+                (
+                    id,
+                    receipt_id,
+                    transaction_date,
+                    store,
+                    item_name,
+                    category,
+                    savings_amount,
+                    source,
+                    quantity,
+                    paid_unit_price,
+                    regular_unit_price
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(record.id),
+                    str(record.receipt_id),
+                    record.transaction_date.isoformat(),
+                    record.store,
+                    record.item_name,
+                    record.category,
+                    record.savings_amount,
+                    record.source,
+                    record.quantity,
+                    record.paid_unit_price,
+                    record.regular_unit_price,
+                ),
+            )
+        return record.id
 
     # --- Price History Operations ---
 

@@ -66,6 +66,10 @@ class LineItem(BaseModel):
     quantity: float = 1.0
     unit_price: float
     total_price: float
+    sale: bool = False
+    discount_amount: float = 0.0
+    coupon_amount: float = 0.0
+    regular_unit_price: float | None = None
     matched_list_item_id: UUID | None = None
 
 
@@ -81,6 +85,8 @@ class Receipt(BaseModel):
     line_items: list[LineItem]
     subtotal: float
     tax: float = 0.0
+    discount_total: float = 0.0
+    coupon_total: float = 0.0
     total: float
     payment_method: str | None = None
     receipt_image_path: str | None = None
@@ -274,6 +280,46 @@ class SpendingSummary(BaseModel):
     budget_limit: float | None = None
     budget_remaining: float | None = None
     budget_percentage: float | None = None
+
+
+class SavingsContributor(BaseModel):
+    """Savings rollup for an item/store/category/source."""
+
+    name: str
+    total_savings: float
+    record_count: int
+
+
+class SavingsRecord(BaseModel):
+    """A persisted savings record derived from receipt discounts."""
+
+    id: UUID = Field(default_factory=uuid4)
+    receipt_id: UUID
+    transaction_date: date
+    store: str
+    item_name: str
+    category: str = Category.OTHER.value
+    savings_amount: float
+    source: str = "line_item_discount"
+    quantity: float = 1.0
+    paid_unit_price: float | None = None
+    regular_unit_price: float | None = None
+
+
+class SavingsSummary(BaseModel):
+    """Savings analytics summary."""
+
+    period: str  # "weekly", "monthly", "yearly"
+    start_date: date
+    end_date: date
+    total_savings: float
+    receipt_count: int
+    record_count: int
+    top_items: list[SavingsContributor] = Field(default_factory=list)
+    top_stores: list[SavingsContributor] = Field(default_factory=list)
+    top_categories: list[SavingsContributor] = Field(default_factory=list)
+    by_source: list[SavingsContributor] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
 
 
 class PriceComparison(BaseModel):

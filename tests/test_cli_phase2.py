@@ -274,6 +274,75 @@ class TestStatsRouteCommand:
         assert result.exit_code == 0
 
 
+class TestStatsSavingsCommand:
+    """Tests for grocery stats savings command."""
+
+    def test_savings_empty(self, cli_data_dir):
+        """Savings command returns empty summary when no records exist."""
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "savings"])
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["success"] is True
+        assert output["data"]["savings"]["total_savings"] == 0.0
+
+    def test_savings_with_receipt_discounts(self, cli_data_dir):
+        """Savings command reports totals after processing discounted receipt."""
+        receipt_data = json.dumps(
+            {
+                "store_name": "Giant",
+                "transaction_date": date.today().isoformat(),
+                "line_items": [
+                    {
+                        "item_name": "Milk",
+                        "quantity": 1,
+                        "unit_price": 4.99,
+                        "total_price": 4.99,
+                        "discount_amount": 1.0,
+                    },
+                    {
+                        "item_name": "Bread",
+                        "quantity": 1,
+                        "unit_price": 3.99,
+                        "total_price": 3.99,
+                    },
+                ],
+                "subtotal": 8.98,
+                "discount_total": 0.5,
+                "coupon_total": 0.5,
+                "total": 8.98,
+            }
+        )
+        process_result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "receipt",
+                "process",
+                "--data",
+                receipt_data,
+            ],
+        )
+        assert process_result.exit_code == 0
+
+        result = runner.invoke(
+            app,
+            ["--json", "--data-dir", str(cli_data_dir), "stats", "savings", "--period", "monthly"],
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["data"]["savings"]["total_savings"] == 2.0
+        assert output["data"]["savings"]["receipt_count"] == 1
+        assert len(output["data"]["savings"]["top_items"]) >= 1
+
+    def test_savings_rich_mode_renders_summary(self, cli_data_dir):
+        """Savings command in Rich mode renders summary details."""
+        result = runner.invoke(app, ["--data-dir", str(cli_data_dir), "stats", "savings"])
+        assert result.exit_code == 0
+        assert "Savings Summary" in result.stdout
+
+
 class TestOutOfStockReportCommand:
     """Tests for grocery out-of-stock report command."""
 

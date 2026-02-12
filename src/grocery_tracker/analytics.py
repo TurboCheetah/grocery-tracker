@@ -20,6 +20,9 @@ from .models import (
     PurchaseRecord,
     RouteItemAssignment,
     RouteStoreStop,
+    SavingsContributor,
+    SavingsRecord,
+    SavingsSummary,
     ShoppingRoute,
     SpendingSummary,
     StorePreferenceScore,
@@ -50,14 +53,7 @@ class Analytics:
         Returns:
             SpendingSummary with breakdown
         """
-        today = date.today()
-
-        if period == "weekly":
-            start_date = today - timedelta(days=today.weekday())
-        elif period == "yearly":
-            start_date = today.replace(month=1, day=1)
-        else:  # monthly
-            start_date = today.replace(day=1)
+        start_date, today = self._period_window(period)
 
         receipts = self.data_store.list_receipts()
 
@@ -114,6 +110,35 @@ class Analytics:
             budget_limit=budget_limit,
             budget_remaining=budget_remaining,
             budget_percentage=budget_percentage,
+        )
+
+    def savings_summary(self, period: str = "monthly") -> SavingsSummary:
+        """Generate savings summary from persisted savings records."""
+        start_date, end_date = self._period_window(period)
+        records = [
+            record
+            for record in self.data_store.load_savings_records()
+            if start_date <= record.transaction_date <= end_date
+        ]
+
+        total_savings = round(sum(record.savings_amount for record in records), 2)
+        receipt_count = len({record.receipt_id for record in records})
+
+        return SavingsSummary(
+            period=period,
+            start_date=start_date,
+            end_date=end_date,
+            total_savings=total_savings,
+            receipt_count=receipt_count,
+            record_count=len(records),
+            top_items=self._savings_contributors(records, key="item_name"),
+            top_stores=self._savings_contributors(records, key="store"),
+            top_categories=self._savings_contributors(records, key="category"),
+            by_source=self._savings_contributors(records, key="source"),
+            assumptions=[
+                "Line-item savings use explicit discount/coupon amounts when provided.",
+                "Receipt-level discounts are prorated across line items by line total.",
+            ],
         )
 
     def price_comparison(self, item_name: str) -> PriceComparison | None:
@@ -657,6 +682,51 @@ class Analytics:
                 store=receipt.store_name,
                 category=cat,
             )
+
+    @staticmethod
+    def _period_window(period: str) -> tuple[date, date]:
+        """Return start/end date for supported summary periods."""
+        today = date.today()
+        if period == "weekly":
+            return today - timedelta(days=today.weekday()), today
+        if period == "yearly":
+            return today.replace(month=1, day=1), today
+        return today.replace(day=1), today
+
+    @staticmethod
+    def _savings_contributors(
+        records: list[SavingsRecord],
+        key: str,
+        limit: int = 5,
+    ) -> list[SavingsContributor]:
+        """Aggregate savings contributors deterministically."""
+        totals: dict[str, float] = defaultdict(float)
+        counts: dict[str, int] = defaultdict(int)
+
+        for record in records:
+            bucket = getattr(record, key, None)
+            if not bucket:
+                continue
+            totals[bucket] += record.savings_amount
+            counts[bucket] += 1
+
+        ranked = sorted(
+            totals.items(),
+            key=lambda row: (
+                -round(row[1], 2),
+                -counts[row[0]],
+                row[0].lower(),
+            ),
+        )[:limit]
+
+        return [
+            SavingsContributor(
+                name=name,
+                total_savings=round(total, 2),
+                record_count=counts[name],
+            )
+            for name, total in ranked
+        ]
 
     def _calculate_category_inflation(
         self,

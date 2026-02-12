@@ -8,7 +8,7 @@ from pydantic import BaseModel, field_validator
 from .data_store import DataStore
 from .item_normalizer import canonical_item_display_name, normalize_item_name
 from .list_manager import ListManager
-from .models import ItemStatus, LineItem, Receipt, ReconciliationResult
+from .models import ItemStatus, LineItem, Receipt, ReconciliationResult, SavingsRecord
 
 
 class ReceiptInput(BaseModel):
@@ -22,6 +22,8 @@ class ReceiptInput(BaseModel):
     line_items: list[LineItem]
     subtotal: float
     tax: float = 0.0
+    discount_total: float = 0.0
+    coupon_total: float = 0.0
     total: float
     payment_method: str | None = None
 
@@ -69,6 +71,8 @@ class ReceiptProcessor:
             line_items=receipt_input.line_items,
             subtotal=receipt_input.subtotal,
             tax=receipt_input.tax,
+            discount_total=receipt_input.discount_total,
+            coupon_total=receipt_input.coupon_total,
             total=receipt_input.total,
             payment_method=receipt_input.payment_method,
         )
@@ -120,6 +124,7 @@ class ReceiptProcessor:
                 receipt_item.unit_price,
                 receipt_input.transaction_date,
                 receipt_id,
+                sale=self._line_item_has_sale(receipt_item),
             )
 
         # Find items still needed (on list but not in receipt)
@@ -138,6 +143,8 @@ class ReceiptProcessor:
                 quantity=receipt_item.quantity,
                 store=receipt_input.store_name,
             )
+
+        self._persist_savings_records(receipt)
 
         return ReconciliationResult(
             receipt_id=receipt_id,
@@ -171,6 +178,14 @@ class ReceiptProcessor:
             line_items=line_items,
             subtotal=receipt_dict["subtotal"],
             tax=receipt_dict.get("tax", 0.0),
+            discount_total=receipt_dict.get(
+                "discount_total",
+                receipt_dict.get("receipt_discount_total", 0.0),
+            ),
+            coupon_total=receipt_dict.get(
+                "coupon_total",
+                receipt_dict.get("receipt_coupon_total", 0.0),
+            ),
             total=receipt_dict["total"],
             payment_method=receipt_dict.get("payment_method"),
         )
@@ -224,6 +239,7 @@ class ReceiptProcessor:
         price: float,
         purchase_date: date,
         receipt_id: UUID,
+        sale: bool = False,
     ) -> None:
         """Update price history for an item.
 
@@ -233,6 +249,7 @@ class ReceiptProcessor:
             price: Unit price
             purchase_date: Date of purchase
             receipt_id: Associated receipt ID
+            sale: Whether this line item was on sale/discount
         """
         self.data_store.update_price(
             item_name=item_name,
@@ -240,7 +257,126 @@ class ReceiptProcessor:
             price=price,
             purchase_date=purchase_date,
             receipt_id=receipt_id,
+            sale=sale,
         )
+
+    def _persist_savings_records(self, receipt: Receipt) -> None:
+        """Persist line-item and receipt-level savings as normalized records."""
+        receipt_level_savings = max(receipt.discount_total, 0.0) + max(receipt.coupon_total, 0.0)
+        allocated_receipt_savings = self._allocate_receipt_level_savings(
+            receipt_level_savings,
+            receipt.line_items,
+        )
+
+        for index, line_item in enumerate(receipt.line_items):
+            category = self._line_item_category(line_item)
+            line_item_savings = self._line_item_savings(line_item)
+            receipt_allocated = allocated_receipt_savings[index]
+
+            if line_item_savings > 0:
+                self.data_store.add_savings_record(
+                    SavingsRecord(
+                        receipt_id=receipt.id,
+                        transaction_date=receipt.transaction_date,
+                        store=receipt.store_name,
+                        item_name=canonical_item_display_name(line_item.item_name),
+                        category=category,
+                        savings_amount=line_item_savings,
+                        source="line_item_discount",
+                        quantity=line_item.quantity,
+                        paid_unit_price=line_item.unit_price,
+                        regular_unit_price=line_item.regular_unit_price,
+                    )
+                )
+
+            if receipt_allocated > 0:
+                self.data_store.add_savings_record(
+                    SavingsRecord(
+                        receipt_id=receipt.id,
+                        transaction_date=receipt.transaction_date,
+                        store=receipt.store_name,
+                        item_name=canonical_item_display_name(line_item.item_name),
+                        category=category,
+                        savings_amount=receipt_allocated,
+                        source="receipt_discount",
+                        quantity=line_item.quantity,
+                        paid_unit_price=line_item.unit_price,
+                        regular_unit_price=line_item.regular_unit_price,
+                    )
+                )
+
+    @staticmethod
+    def _line_item_has_sale(line_item: LineItem) -> bool:
+        """Determine whether a line item should be flagged as a sale price."""
+        if line_item.sale:
+            return True
+        if line_item.discount_amount > 0 or line_item.coupon_amount > 0:
+            return True
+        return (
+            line_item.regular_unit_price is not None
+            and line_item.regular_unit_price > line_item.unit_price
+        )
+
+    @staticmethod
+    def _line_item_savings(line_item: LineItem) -> float:
+        """Calculate explicit/inferred savings from a line item."""
+        explicit = max(line_item.discount_amount, 0.0) + max(line_item.coupon_amount, 0.0)
+        if explicit > 0:
+            return round(explicit, 2)
+
+        if (
+            line_item.regular_unit_price is not None
+            and line_item.regular_unit_price > line_item.unit_price
+        ):
+            inferred = (line_item.regular_unit_price - line_item.unit_price) * line_item.quantity
+            return round(max(inferred, 0.0), 2)
+
+        return 0.0
+
+    @staticmethod
+    def _allocate_receipt_level_savings(
+        total_discount: float,
+        line_items: list[LineItem],
+    ) -> list[float]:
+        """Allocate receipt-level savings across line items using deterministic weighting."""
+        if not line_items or total_discount <= 0:
+            return [0.0] * len(line_items)
+
+        total_cents = max(int(round(total_discount * 100)), 0)
+        if total_cents == 0:
+            return [0.0] * len(line_items)
+
+        weights = [max(item.total_price, 0.0) for item in line_items]
+        weight_sum = sum(weights)
+        if weight_sum <= 0:
+            weights = [1.0] * len(line_items)
+            weight_sum = float(len(line_items))
+
+        raw_cents = [total_cents * (weight / weight_sum) for weight in weights]
+        allocated_cents = [int(value) for value in raw_cents]
+        remainder = total_cents - sum(allocated_cents)
+        if remainder > 0:
+            order = sorted(
+                range(len(line_items)),
+                key=lambda idx: (
+                    raw_cents[idx] - allocated_cents[idx],
+                    weights[idx],
+                    line_items[idx].item_name.lower(),
+                ),
+                reverse=True,
+            )
+            for idx in order[:remainder]:
+                allocated_cents[idx] += 1
+
+        return [round(cents / 100, 2) for cents in allocated_cents]
+
+    def _line_item_category(self, line_item: LineItem) -> str:
+        """Infer line item category from matched grocery list item when available."""
+        if line_item.matched_list_item_id:
+            matched_item = self.data_store.get_item(line_item.matched_list_item_id)
+            if matched_item and matched_item.category:
+                return matched_item.category
+        return "Other"
 
     def get_reconciliation_summary(self, result: ReconciliationResult) -> str:
         """Generate a human-readable summary of reconciliation.

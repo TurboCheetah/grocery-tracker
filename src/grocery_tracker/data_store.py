@@ -24,6 +24,7 @@ from .models import (
     PricePoint,
     PurchaseRecord,
     Receipt,
+    SavingsRecord,
     UserPreferences,
     WasteRecord,
 )
@@ -45,6 +46,9 @@ class DataStoreProtocol(Protocol):
     def save_receipt(self, receipt: Receipt) -> UUID: ...
     def load_receipt(self, receipt_id: str | UUID) -> Receipt | None: ...
     def list_receipts(self) -> list[Receipt]: ...
+    def load_savings_records(self) -> list[SavingsRecord]: ...
+    def save_savings_records(self, records: list[SavingsRecord]) -> None: ...
+    def add_savings_record(self, record: SavingsRecord) -> UUID: ...
     def load_price_history(self) -> dict[str, dict[str, PriceHistory]]: ...
     def save_price_history(self, history: dict[str, dict[str, PriceHistory]]) -> None: ...
     def update_price(
@@ -182,6 +186,10 @@ class DataStore:
         """Path to a receipt file."""
         return self.data_dir / "receipts" / f"{receipt_id}.json"
 
+    def _savings_records_path(self) -> Path:
+        """Path to savings records file."""
+        return self.data_dir / "savings_records.json"
+
     # --- Grocery List Operations ---
 
     def load_list(self) -> GroceryList:
@@ -286,6 +294,30 @@ class DataStore:
             receipts.append(Receipt(**data))
 
         return sorted(receipts, key=lambda r: r.transaction_date, reverse=True)
+
+    def load_savings_records(self) -> list[SavingsRecord]:
+        """Load persisted savings records."""
+        path = self._savings_records_path()
+        if not path.exists():
+            return []
+
+        with open(path) as f:
+            data = json.load(f, object_hook=json_decoder)
+
+        return [SavingsRecord(**record) for record in data]
+
+    def save_savings_records(self, records: list[SavingsRecord]) -> None:
+        """Persist savings records."""
+        path = self._savings_records_path()
+        with open(path, "w") as f:
+            json.dump([record.model_dump() for record in records], f, cls=JSONEncoder, indent=2)
+
+    def add_savings_record(self, record: SavingsRecord) -> UUID:
+        """Append one savings record."""
+        records = self.load_savings_records()
+        records.append(record)
+        self.save_savings_records(records)
+        return record.id
 
     # --- Price History Operations ---
 
