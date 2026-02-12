@@ -83,12 +83,16 @@ class OutputFormatter:
             self._render_route(data)
         elif "recommendation" in data.get("data", {}):
             self._render_recommendation(data)
+        elif "bulk_buying_analysis" in data.get("data", {}):
+            self._render_bulk_buying_analysis(data)
         elif "suggestions" in data.get("data", {}):
             self._render_suggestions(data)
         elif "out_of_stock" in data.get("data", {}):
             self._render_out_of_stock(data)
         elif "frequency" in data.get("data", {}):
             self._render_frequency(data)
+        elif "recipe_payload" in data.get("data", {}):
+            self._render_recipe_payload(data)
         elif "inventory_item" in data.get("data", {}):
             self._render_inventory_item(data)
         elif "inventory" in data.get("data", {}):
@@ -533,6 +537,48 @@ Total: ${receipt["total"]:.2f}{savings_line}""",
                 f"[bold]{s['item_name']}[/bold]: {s['message']}"
             )
 
+    def _render_bulk_buying_analysis(self, data: dict) -> None:
+        """Render bulk buying value analysis."""
+        analysis = data["data"]["bulk_buying_analysis"]
+
+        self.console.print(f"\n[bold]Bulk Buying Analysis: {analysis['item_name']}[/bold]")
+        if not analysis.get("comparable"):
+            self.console.print(
+                f"[yellow]Comparison unavailable:[/yellow] "
+                f"{analysis.get('break_even_recommendation', 'n/a')}"
+            )
+            return
+
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Option")
+        table.add_column("Pack", justify="right")
+        table.add_column("Price", justify="right")
+        table.add_column("Unit Price", justify="right")
+
+        for key in ("standard_option", "bulk_option"):
+            option = analysis[key]
+            table.add_row(
+                option["name"].title(),
+                f"{option.get('quantity', 0):g} {option.get('unit', '')}".strip(),
+                f"${option.get('pack_price', 0):.2f}",
+                f"${option.get('unit_price', 0):.4f}/{option.get('normalized_unit', 'unit')}",
+            )
+        self.console.print(table)
+
+        self.console.print(
+            f"Recommendation: [green]{analysis.get('recommended_option', 'unknown')}[/green]"
+        )
+        self.console.print(analysis.get("break_even_recommendation", ""))
+        if analysis.get("projected_monthly_savings") is not None:
+            self.console.print(
+                f"Projected monthly savings: ${analysis.get('projected_monthly_savings', 0):.2f}"
+            )
+        assumptions = analysis.get("assumptions", [])
+        if assumptions:
+            self.console.print("\n[dim]Assumptions:[/dim]")
+            for assumption in assumptions:
+                self.console.print(f"  - {assumption}")
+
     def _render_out_of_stock(self, data: dict) -> None:
         """Render out-of-stock records."""
         records = data["data"]["out_of_stock"]
@@ -575,6 +621,52 @@ Total: ${receipt["total"]:.2f}{savings_line}""",
             self.console.print(f"Next expected: {freq['next_expected']}")
         self.console.print(f"Confidence: {freq.get('confidence', 'low')}")
         self.console.print(f"Total purchases: {freq.get('total_purchases', 0)}")
+
+    def _render_recipe_payload(self, data: dict) -> None:
+        """Render recipe hook payload summary."""
+        payload = data["data"]["recipe_payload"]
+        items = payload.get("expiring_items", [])
+
+        self.console.print("\n[bold]Use-It-Up Recipe Payload[/bold]")
+        self.console.print(f"Horizon: {payload.get('horizon_days', 0)} day(s)")
+        self.console.print(f"Expiring items: {len(items)}")
+
+        if items:
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Rank", justify="right")
+            table.add_column("Item")
+            table.add_column("Expires")
+            table.add_column("Days", justify="right")
+            table.add_column("Qty", justify="right")
+
+            for item in items:
+                qty_display = f"{item.get('quantity', 0):g}"
+                if item.get("unit"):
+                    qty_display = f"{qty_display} {item['unit']}"
+                table.add_row(
+                    str(item.get("priority_rank", "")),
+                    item.get("item_name", "-"),
+                    str(item.get("expiration_date", "-")),
+                    str(item.get("days_until_expiration", "")),
+                    qty_display,
+                )
+            self.console.print(table)
+
+        constraints = payload.get("constraints", {})
+        if constraints:
+            self.console.print("\n[dim]Constraints:[/dim]")
+            dietary = constraints.get("dietary_restrictions", [])
+            allergens = constraints.get("allergens", [])
+            if dietary:
+                self.console.print(f"  Dietary: {', '.join(dietary)}")
+            if allergens:
+                self.console.print(f"  Allergens: {', '.join(allergens)}")
+
+        assumptions = payload.get("assumptions", [])
+        if assumptions:
+            self.console.print("\n[dim]Assumptions:[/dim]")
+            for assumption in assumptions:
+                self.console.print(f"  - {assumption}")
 
     def _render_inventory_item(self, data: dict) -> None:
         """Render a single inventory item."""

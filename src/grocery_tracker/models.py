@@ -434,6 +434,35 @@ class ShoppingRoute(BaseModel):
     rationale: list[str] = Field(default_factory=list)
 
 
+class BulkPackOption(BaseModel):
+    """One pack-size option for bulk buying analysis."""
+
+    name: str  # "standard" or "bulk"
+    quantity: float
+    unit: str
+    pack_price: float
+    normalized_quantity: float | None = None
+    normalized_unit: str | None = None
+    unit_price: float | None = None
+
+
+class BulkBuyingAnalysis(BaseModel):
+    """Bulk buying value analysis for one item."""
+
+    item_name: str
+    comparable: bool = False
+    comparison_status: str = "unknown"
+    standard_option: BulkPackOption
+    bulk_option: BulkPackOption
+    recommended_option: str = "unknown"  # "bulk", "standard", or "unknown"
+    break_even_units: float | None = None
+    break_even_standard_packs: float | None = None
+    monthly_usage_units: float | None = None
+    projected_monthly_savings: float | None = None
+    break_even_recommendation: str = ""
+    assumptions: list[str] = Field(default_factory=list)
+
+
 # --- Phase 3 Models ---
 
 
@@ -543,3 +572,28 @@ class BudgetTracking(BaseModel):
         if self.monthly_limit <= 0:
             return 0.0
         return round(self.total_spent / self.monthly_limit * 100, 1)
+
+
+class RecipeHookItem(BaseModel):
+    """Prioritized inventory item for use-it-up recipe hooks."""
+
+    item_name: str
+    quantity: float
+    unit: str | None = None
+    category: str = Category.OTHER.value
+    location: InventoryLocation = InventoryLocation.PANTRY
+    expiration_date: date | None = None
+    days_until_expiration: int | None = None
+    priority_rank: int = 0
+
+
+class RecipeHookPayload(BaseModel):
+    """Structured payload for external recipe generation hooks."""
+
+    generated_at: datetime = Field(default_factory=datetime.now)
+    horizon_days: int = 3
+    user: str | None = None
+    expiring_items: list[RecipeHookItem] = Field(default_factory=list)
+    priority_order: list[str] = Field(default_factory=list)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    assumptions: list[str] = Field(default_factory=list)

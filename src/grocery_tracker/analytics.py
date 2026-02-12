@@ -7,6 +7,8 @@ from .data_store import DataStore
 from .item_normalizer import canonical_item_display_name, normalize_item_name
 from .models import (
     BudgetTracking,
+    BulkBuyingAnalysis,
+    BulkPackOption,
     CategoryBudget,
     CategoryInflation,
     CategorySpending,
@@ -18,6 +20,8 @@ from .models import (
     PricePoint,
     Priority,
     PurchaseRecord,
+    RecipeHookItem,
+    RecipeHookPayload,
     RouteItemAssignment,
     RouteStoreStop,
     SavingsContributor,
@@ -222,6 +226,154 @@ class Analytics:
                 all_points.extend(price_history.price_points)
 
         return self._build_seasonal_purchase_pattern(display_name, all_points)
+
+    def bulk_buying_analysis(
+        self,
+        item_name: str,
+        standard_quantity: float,
+        standard_price: float,
+        standard_unit: str,
+        bulk_quantity: float,
+        bulk_price: float,
+        bulk_unit: str,
+        monthly_usage: float | None = None,
+    ) -> BulkBuyingAnalysis:
+        """Compare standard and bulk pack options with unit normalization."""
+        assumptions = [
+            "Unit-price comparison assumes both pack options are for the same product quality.",
+            "Projected monthly savings are directional and based on recent usage estimates.",
+        ]
+
+        standard = BulkPackOption(
+            name="standard",
+            quantity=standard_quantity,
+            unit=standard_unit,
+            pack_price=standard_price,
+        )
+        bulk = BulkPackOption(
+            name="bulk",
+            quantity=bulk_quantity,
+            unit=bulk_unit,
+            pack_price=bulk_price,
+        )
+
+        standard_norm = self._normalize_unit(standard_unit)
+        bulk_norm = self._normalize_unit(bulk_unit)
+
+        if standard_norm is None or bulk_norm is None:
+            assumptions.append("Unknown unit detected; comparison skipped for safety.")
+            return BulkBuyingAnalysis(
+                item_name=item_name,
+                comparable=False,
+                comparison_status="unknown_unit",
+                standard_option=standard,
+                bulk_option=bulk,
+                break_even_recommendation=(
+                    "Unable to compare pack options because one or more units are unknown."
+                ),
+                assumptions=assumptions,
+            )
+
+        standard_group, standard_factor, normalized_unit = standard_norm
+        bulk_group, bulk_factor, _ = bulk_norm
+
+        if standard_group != bulk_group:
+            assumptions.append("Unit families differ (for example weight vs volume).")
+            return BulkBuyingAnalysis(
+                item_name=item_name,
+                comparable=False,
+                comparison_status="unit_mismatch",
+                standard_option=standard,
+                bulk_option=bulk,
+                break_even_recommendation=(
+                    "Unable to compare pack options because units are not compatible."
+                ),
+                assumptions=assumptions,
+            )
+
+        standard_normalized_qty = round(standard_quantity * standard_factor, 4)
+        bulk_normalized_qty = round(bulk_quantity * bulk_factor, 4)
+        standard.normalized_quantity = standard_normalized_qty
+        standard.normalized_unit = normalized_unit
+        bulk.normalized_quantity = bulk_normalized_qty
+        bulk.normalized_unit = normalized_unit
+
+        if standard_normalized_qty <= 0 or bulk_normalized_qty <= 0:
+            assumptions.append("Pack quantity must be greater than zero for safe comparison.")
+            return BulkBuyingAnalysis(
+                item_name=item_name,
+                comparable=False,
+                comparison_status="invalid_quantity",
+                standard_option=standard,
+                bulk_option=bulk,
+                break_even_recommendation="Unable to compare pack options due to invalid quantity.",
+                assumptions=assumptions,
+            )
+
+        standard.unit_price = round(standard_price / standard_normalized_qty, 4)
+        bulk.unit_price = round(bulk_price / bulk_normalized_qty, 4)
+
+        savings_per_unit = round((standard.unit_price - bulk.unit_price), 4)
+        recommended_option = "bulk" if savings_per_unit > 0 else "standard"
+
+        break_even_units = None
+        break_even_standard_packs = None
+        break_even_recommendation = "Standard pack is equal or cheaper per unit."
+
+        if savings_per_unit > 0:
+            if bulk_price <= standard_price:
+                break_even_recommendation = "Bulk is immediately cheaper per unit and per pack."
+                break_even_units = 0.0
+                break_even_standard_packs = 0.0
+            else:
+                upfront_delta = bulk_price - standard_price
+                break_even_units = round(upfront_delta / savings_per_unit, 2)
+                break_even_standard_packs = round(
+                    break_even_units / standard_normalized_qty,
+                    2,
+                )
+                break_even_recommendation = (
+                    f"Bulk breaks even after ~{break_even_units:g} {normalized_unit} "
+                    f"(~{break_even_standard_packs:g} standard pack(s))."
+                )
+
+        monthly_usage_units = None
+        if monthly_usage is not None:
+            monthly_usage_units = round(monthly_usage * standard_factor, 2)
+            assumptions.append(
+                f"Monthly usage provided directly: {monthly_usage:g} {standard_unit}."
+            )
+        else:
+            estimated_packs = self._estimate_monthly_pack_usage(item_name)
+            if estimated_packs is not None:
+                monthly_usage_units = round(estimated_packs * standard_normalized_qty, 2)
+                assumptions.append(
+                    "Monthly usage estimated from purchase frequency history "
+                    "(pack counts projected to 30 days)."
+                )
+            else:
+                assumptions.append(
+                    "Monthly usage unavailable from history; monthly savings not projected."
+                )
+
+        projected_monthly_savings = None
+        if monthly_usage_units is not None:
+            projected_monthly_savings = round(savings_per_unit * monthly_usage_units, 2)
+
+        return BulkBuyingAnalysis(
+            item_name=item_name,
+            comparable=True,
+            comparison_status="ok",
+            standard_option=standard,
+            bulk_option=bulk,
+            recommended_option=recommended_option,
+            break_even_units=break_even_units,
+            break_even_standard_packs=break_even_standard_packs,
+            monthly_usage_units=monthly_usage_units,
+            projected_monthly_savings=projected_monthly_savings,
+            break_even_recommendation=break_even_recommendation,
+            assumptions=assumptions,
+        )
 
     def get_suggestions(self) -> list[Suggestion]:
         """Generate smart shopping suggestions.
@@ -876,6 +1028,122 @@ class Analytics:
             reverse=True,
         )
 
+    @staticmethod
+    def _normalize_unit(unit: str | None) -> tuple[str, float, str] | None:
+        """Normalize units to a comparable family and base unit."""
+        if not unit:
+            return None
+
+        normalized = unit.strip().lower().replace(".", "")
+        normalized = " ".join(normalized.split())
+
+        aliases = {
+            "count": {"count", "ct", "ea", "each", "item", "items", "piece", "pieces", "unit"},
+            "g": {"g", "gram", "grams"},
+            "kg": {"kg", "kilogram", "kilograms"},
+            "oz": {"oz", "ounce", "ounces"},
+            "lb": {"lb", "lbs", "pound", "pounds"},
+            "ml": {"ml", "milliliter", "milliliters"},
+            "l": {"l", "liter", "liters"},
+            "fl_oz": {"fl oz", "floz", "fluid ounce", "fluid ounces"},
+        }
+
+        canonical = None
+        for key, values in aliases.items():
+            if normalized in values:
+                canonical = key
+                break
+        if canonical is None:
+            return None
+
+        if canonical in {"count"}:
+            return "count", 1.0, "count"
+        if canonical in {"g"}:
+            return "weight", 1.0, "g"
+        if canonical in {"kg"}:
+            return "weight", 1000.0, "g"
+        if canonical in {"oz"}:
+            return "weight", 28.3495, "g"
+        if canonical in {"lb"}:
+            return "weight", 453.592, "g"
+        if canonical in {"ml"}:
+            return "volume", 1.0, "ml"
+        if canonical in {"l"}:
+            return "volume", 1000.0, "ml"
+        return "volume", 29.5735, "ml"
+
+    def _estimate_monthly_pack_usage(self, item_name: str) -> float | None:
+        """Estimate monthly pack usage from frequency history."""
+        frequency = self.data_store.load_frequency_data()
+        canonical_target = normalize_item_name(item_name)
+        matching = [
+            freq for key, freq in frequency.items() if normalize_item_name(key) == canonical_target
+        ]
+        if not matching:
+            return None
+
+        purchases: list[PurchaseRecord] = []
+        for freq in matching:
+            purchases.extend(freq.purchase_history)
+
+        if len(purchases) < 2:
+            return None
+
+        ordered = sorted(purchases, key=lambda p: p.date)
+        day_span = max((ordered[-1].date - ordered[0].date).days, 1)
+        total_quantity = sum(max(p.quantity, 0) for p in ordered)
+        if total_quantity <= 0:
+            return None
+        return round(total_quantity / day_span * 30, 2)
+
+    def _recipe_constraints(self, user: str | None = None) -> dict:
+        """Build recipe constraints from one user or aggregated preferences."""
+        if user:
+            prefs = self.data_store.get_user_preferences(user)
+            if prefs is None:
+                return {
+                    "dietary_restrictions": [],
+                    "allergens": [],
+                    "favorite_items": [],
+                    "brand_preferences": {},
+                }
+            return {
+                "dietary_restrictions": sorted(set(prefs.dietary_restrictions)),
+                "allergens": sorted(set(prefs.allergens)),
+                "favorite_items": sorted(set(prefs.favorite_items)),
+                "brand_preferences": {
+                    item_name: [brand]
+                    for item_name, brand in sorted(
+                        prefs.brand_preferences.items(),
+                        key=lambda row: row[0],
+                    )
+                },
+            }
+
+        preferences = self.data_store.load_preferences()
+        dietary: set[str] = set()
+        allergens: set[str] = set()
+        favorites: set[str] = set()
+        brand_candidates: dict[str, set[str]] = defaultdict(set)
+
+        for pref in preferences.values():
+            dietary.update(pref.dietary_restrictions)
+            allergens.update(pref.allergens)
+            favorites.update(pref.favorite_items)
+            for item_name, brand in pref.brand_preferences.items():
+                brand_candidates[item_name].add(brand)
+
+        brand_preferences = {
+            item_name: sorted(brands)
+            for item_name, brands in sorted(brand_candidates.items(), key=lambda row: row[0])
+        }
+        return {
+            "dietary_restrictions": sorted(dietary),
+            "allergens": sorted(allergens),
+            "favorite_items": sorted(favorites),
+            "brand_preferences": brand_preferences,
+        }
+
     def _group_frequency_data(self, frequency_data: dict[str, FrequencyData]) -> dict[str, dict]:
         grouped: dict[str, dict] = {}
         for item_name, freq in frequency_data.items():
@@ -1224,6 +1492,65 @@ class Analytics:
                     return category
 
         return "Other"
+
+    # --- Skill Hook Payloads ---
+
+    def recipe_use_it_up_payload(
+        self,
+        days: int = 3,
+        user: str | None = None,
+    ) -> RecipeHookPayload:
+        """Build structured payload for external recipe/use-it-up generation."""
+        today = date.today()
+        inventory = self.data_store.load_inventory()
+        expiring = []
+        for item in inventory:
+            if item.expiration_date is None:
+                continue
+            days_until = (item.expiration_date - today).days
+            if days_until <= days:
+                expiring.append((item, days_until))
+
+        expiring.sort(
+            key=lambda row: (
+                row[1],
+                row[0].item_name.lower(),
+            )
+        )
+
+        payload_items: list[RecipeHookItem] = []
+        for rank, (item, days_until) in enumerate(expiring, start=1):
+            payload_items.append(
+                RecipeHookItem(
+                    item_name=item.item_name,
+                    quantity=item.quantity,
+                    unit=item.unit,
+                    category=item.category,
+                    location=item.location,
+                    expiration_date=item.expiration_date,
+                    days_until_expiration=days_until,
+                    priority_rank=rank,
+                )
+            )
+
+        constraints = self._recipe_constraints(user=user)
+        assumptions = [
+            "Payload is intended for external recipe generation skills only.",
+            "Priority ordering is by nearest expiration date, then item name.",
+        ]
+        if user:
+            assumptions.append(f"Constraints are scoped to user '{user}'.")
+        else:
+            assumptions.append("Constraints aggregate all known household preferences.")
+
+        return RecipeHookPayload(
+            horizon_days=days,
+            user=user,
+            expiring_items=payload_items,
+            priority_order=[item.item_name for item in payload_items],
+            constraints=constraints,
+            assumptions=assumptions,
+        )
 
     # --- Waste Analytics ---
 

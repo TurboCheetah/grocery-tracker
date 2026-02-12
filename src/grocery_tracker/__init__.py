@@ -7,6 +7,8 @@ from .inventory_manager import InventoryManager
 from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
 from .models import (
     BudgetTracking,
+    BulkBuyingAnalysis,
+    BulkPackOption,
     Category,
     CategoryBudget,
     CategorySpending,
@@ -25,6 +27,8 @@ from .models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    RecipeHookItem,
+    RecipeHookPayload,
     ReconciliationResult,
     RouteItemAssignment,
     RouteStoreStop,
@@ -51,6 +55,8 @@ __version__ = "1.0.0"
 __all__ = [
     "Analytics",
     "BackendType",
+    "BulkBuyingAnalysis",
+    "BulkPackOption",
     "BudgetTracking",
     "Category",
     "CategoryBudget",
@@ -77,6 +83,8 @@ __all__ = [
     "PricePoint",
     "Priority",
     "PurchaseRecord",
+    "RecipeHookItem",
+    "RecipeHookPayload",
     "Receipt",
     "ReceiptInput",
     "ReceiptProcessor",

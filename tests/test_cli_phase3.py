@@ -247,6 +247,71 @@ class TestInventoryExpiring:
         assert result.exit_code == 0
 
 
+class TestInventoryUseItUpPayload:
+    """Tests for recipe payload hook command."""
+
+    def test_payload_includes_expiring_and_constraints(self, cli_data_dir):
+        """Payload includes expiring items and user constraints."""
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "add",
+                "Milk",
+                "--expires",
+                tomorrow,
+            ],
+        )
+        runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "preferences",
+                "set",
+                "Alice",
+                "--dietary",
+                "vegetarian",
+                "--allergen",
+                "peanuts",
+            ],
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "inventory",
+                "use-it-up-payload",
+                "--days",
+                "3",
+                "--user",
+                "Alice",
+            ],
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        payload = output["data"]["recipe_payload"]
+        assert len(payload["expiring_items"]) == 1
+        assert payload["constraints"]["dietary_restrictions"] == ["vegetarian"]
+        assert payload["constraints"]["allergens"] == ["peanuts"]
+
+    def test_payload_rich_mode(self, cli_data_dir):
+        """Payload command in Rich mode doesn't crash."""
+        result = runner.invoke(
+            app,
+            ["--data-dir", str(cli_data_dir), "inventory", "use-it-up-payload", "--days", "3"],
+        )
+        assert result.exit_code == 0
+
+
 class TestInventoryLowStock:
     """Tests for low-stock command."""
 
@@ -559,6 +624,101 @@ class TestBudgetStatus:
         """Status in Rich mode."""
         runner.invoke(app, ["--data-dir", str(cli_data_dir), "budget", "set", "500"])
         result = runner.invoke(app, ["--data-dir", str(cli_data_dir), "budget", "status"])
+        assert result.exit_code == 0
+
+
+class TestStatsBulk:
+    """Tests for bulk buying analysis command."""
+
+    def test_bulk_analysis_comparable(self, cli_data_dir):
+        """Comparable units return break-even and assumptions."""
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "stats",
+                "bulk",
+                "Soda",
+                "--standard-qty",
+                "1",
+                "--standard-price",
+                "1.50",
+                "--standard-unit",
+                "count",
+                "--bulk-qty",
+                "12",
+                "--bulk-price",
+                "14.40",
+                "--bulk-unit",
+                "count",
+                "--monthly-usage",
+                "20",
+            ],
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        analysis = output["data"]["bulk_buying_analysis"]
+        assert analysis["comparable"] is True
+        assert analysis["recommended_option"] == "bulk"
+        assert "assumptions" in analysis
+        assert analysis["break_even_recommendation"] != ""
+
+    def test_bulk_analysis_unit_mismatch(self, cli_data_dir):
+        """Unit mismatch is returned safely in JSON."""
+        result = runner.invoke(
+            app,
+            [
+                "--json",
+                "--data-dir",
+                str(cli_data_dir),
+                "stats",
+                "bulk",
+                "Milk",
+                "--standard-qty",
+                "64",
+                "--standard-price",
+                "4.99",
+                "--standard-unit",
+                "oz",
+                "--bulk-qty",
+                "1",
+                "--bulk-price",
+                "4.99",
+                "--bulk-unit",
+                "count",
+            ],
+        )
+        assert result.exit_code == 0
+        output = json.loads(result.stdout)
+        assert output["data"]["bulk_buying_analysis"]["comparable"] is False
+        assert output["data"]["bulk_buying_analysis"]["comparison_status"] == "unit_mismatch"
+
+    def test_bulk_analysis_rich_mode(self, cli_data_dir):
+        """Bulk analysis in Rich mode doesn't crash."""
+        result = runner.invoke(
+            app,
+            [
+                "--data-dir",
+                str(cli_data_dir),
+                "stats",
+                "bulk",
+                "Soda",
+                "--standard-qty",
+                "1",
+                "--standard-price",
+                "1.50",
+                "--standard-unit",
+                "count",
+                "--bulk-qty",
+                "12",
+                "--bulk-price",
+                "14.40",
+                "--bulk-unit",
+                "count",
+            ],
+        )
         assert result.exit_code == 0
 
 

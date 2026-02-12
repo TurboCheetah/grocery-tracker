@@ -6,6 +6,9 @@ import pytest
 
 from grocery_tracker.analytics import Analytics
 from grocery_tracker.models import (
+    InventoryItem,
+    InventoryLocation,
+    UserPreferences,
     WasteReason,
     WasteRecord,
 )
@@ -179,3 +182,81 @@ class TestBudgetTracking:
         retrieved = analytics.get_budget_status(month="2026-02")
         assert retrieved is not None
         assert retrieved.monthly_limit == 600.0
+
+
+class TestBulkBuyingAnalysis:
+    """Tests for bulk buying analysis."""
+
+    def test_bulk_analysis_comparable(self, analytics):
+        """Returns break-even recommendation and assumptions for comparable units."""
+        analysis = analytics.bulk_buying_analysis(
+            item_name="Sparkling Water",
+            standard_quantity=1,
+            standard_price=1.50,
+            standard_unit="count",
+            bulk_quantity=12,
+            bulk_price=14.40,
+            bulk_unit="count",
+            monthly_usage=20,
+        )
+        assert analysis.comparable is True
+        assert analysis.recommended_option == "bulk"
+        assert analysis.break_even_recommendation != ""
+        assert len(analysis.assumptions) >= 1
+        assert analysis.projected_monthly_savings is not None
+
+    def test_bulk_analysis_unit_mismatch(self, analytics):
+        """Mismatched unit families are handled safely."""
+        analysis = analytics.bulk_buying_analysis(
+            item_name="Milk",
+            standard_quantity=64,
+            standard_price=4.99,
+            standard_unit="oz",
+            bulk_quantity=1,
+            bulk_price=4.99,
+            bulk_unit="count",
+        )
+        assert analysis.comparable is False
+        assert analysis.comparison_status == "unit_mismatch"
+
+
+class TestRecipeUseItUpPayload:
+    """Tests for recipe/use-it-up payload hooks."""
+
+    def test_payload_includes_priority_and_constraints(self, analytics, data_store):
+        """Payload includes expiring items ordered by urgency plus constraints."""
+        today = date.today()
+        data_store.save_inventory(
+            [
+                InventoryItem(
+                    item_name="Milk",
+                    quantity=1,
+                    unit="carton",
+                    location=InventoryLocation.FRIDGE,
+                    expiration_date=today + timedelta(days=1),
+                ),
+                InventoryItem(
+                    item_name="Spinach",
+                    quantity=1,
+                    unit="bag",
+                    location=InventoryLocation.FRIDGE,
+                    expiration_date=today,
+                ),
+            ]
+        )
+        data_store.save_user_preferences(
+            UserPreferences(
+                user="Alice",
+                brand_preferences={"milk": "Organic Valley"},
+                dietary_restrictions=["vegetarian"],
+                allergens=["peanuts"],
+            )
+        )
+
+        payload = analytics.recipe_use_it_up_payload(days=3, user="Alice")
+        assert len(payload.expiring_items) == 2
+        assert payload.expiring_items[0].item_name == "Spinach"
+        assert payload.expiring_items[0].priority_rank == 1
+        assert payload.constraints["dietary_restrictions"] == ["vegetarian"]
+        assert payload.constraints["allergens"] == ["peanuts"]
+        assert payload.constraints["brand_preferences"] == {"milk": ["Organic Valley"]}

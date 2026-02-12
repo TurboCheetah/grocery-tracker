@@ -5,6 +5,8 @@ from uuid import UUID
 
 from grocery_tracker.models import (
     BudgetTracking,
+    BulkBuyingAnalysis,
+    BulkPackOption,
     Category,
     CategoryBudget,
     CategoryInflation,
@@ -24,6 +26,8 @@ from grocery_tracker.models import (
     Priority,
     PurchaseRecord,
     Receipt,
+    RecipeHookItem,
+    RecipeHookPayload,
     RouteItemAssignment,
     RouteStoreStop,
     SavingsContributor,
@@ -193,6 +197,105 @@ class TestSeasonalModels:
         assert pattern.sample_size == 24
         assert pattern.peak_purchase_months == [6, 7]
         assert pattern.confidence == "high"
+
+
+class TestBulkModels:
+    """Tests for bulk buying models."""
+
+    def test_create_bulk_pack_option(self):
+        option = BulkPackOption(
+            name="bulk",
+            quantity=12,
+            unit="count",
+            pack_price=14.4,
+            normalized_quantity=12,
+            normalized_unit="count",
+            unit_price=1.2,
+        )
+        assert option.name == "bulk"
+        assert option.unit_price == 1.2
+
+    def test_create_bulk_buying_analysis(self):
+        analysis = BulkBuyingAnalysis(
+            item_name="Soda",
+            comparable=True,
+            comparison_status="ok",
+            standard_option=BulkPackOption(
+                name="standard",
+                quantity=1,
+                unit="count",
+                pack_price=1.5,
+                unit_price=1.5,
+            ),
+            bulk_option=BulkPackOption(
+                name="bulk",
+                quantity=12,
+                unit="count",
+                pack_price=14.4,
+                unit_price=1.2,
+            ),
+            recommended_option="bulk",
+            break_even_recommendation="Bulk breaks even after 3 packs.",
+        )
+        assert analysis.comparable is True
+        assert analysis.recommended_option == "bulk"
+
+    def test_create_bulk_buying_analysis_non_comparable_defaults(self):
+        """Non-comparable analysis keeps optional defaults."""
+        analysis = BulkBuyingAnalysis(
+            item_name="Milk",
+            comparable=False,
+            comparison_status="unit_mismatch",
+            standard_option=BulkPackOption(
+                name="standard",
+                quantity=64,
+                unit="oz",
+                pack_price=4.99,
+            ),
+            bulk_option=BulkPackOption(
+                name="bulk",
+                quantity=1,
+                unit="count",
+                pack_price=4.99,
+            ),
+            break_even_recommendation=(
+                "Unable to compare pack options because units are not compatible."
+            ),
+        )
+        assert analysis.break_even_units is None
+        assert analysis.projected_monthly_savings is None
+        assert analysis.assumptions == []
+
+
+class TestRecipeHookModels:
+    """Tests for recipe hook payload models."""
+
+    def test_create_recipe_hook_item_defaults(self):
+        """Recipe hook item applies expected defaults."""
+        item = RecipeHookItem(item_name="Milk", quantity=1)
+        assert item.category == Category.OTHER.value
+        assert item.location == InventoryLocation.PANTRY
+        assert item.priority_rank == 0
+
+    def test_create_recipe_hook_payload(self):
+        payload = RecipeHookPayload(
+            horizon_days=3,
+            expiring_items=[
+                RecipeHookItem(
+                    item_name="Milk",
+                    quantity=1,
+                    unit="carton",
+                    expiration_date=date.today() + timedelta(days=1),
+                    days_until_expiration=1,
+                    priority_rank=1,
+                )
+            ],
+            priority_order=["Milk"],
+            constraints={"dietary_restrictions": ["vegetarian"], "allergens": ["peanuts"]},
+        )
+        assert payload.horizon_days == 3
+        assert payload.expiring_items[0].item_name == "Milk"
+        assert payload.priority_order == ["Milk"]
 
 
 class TestPriceHistory:
