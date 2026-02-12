@@ -29,6 +29,8 @@ from grocery_tracker.models import (
     SavingsContributor,
     SavingsRecord,
     SavingsSummary,
+    SeasonalMonthStat,
+    SeasonalPurchasePattern,
     ShoppingRoute,
     SpendingSummary,
     StorePreferenceScore,
@@ -161,6 +163,36 @@ class TestSavingsModels:
         )
         assert summary.total_savings == 5.0
         assert summary.top_items[0].name == "Milk"
+
+
+class TestSeasonalModels:
+    """Tests for seasonal analytics models."""
+
+    def test_create_seasonal_month_stat(self):
+        """Seasonal month stat captures count and price."""
+        stat = SeasonalMonthStat(month=6, purchase_count=5, average_price=3.49)
+        assert stat.month == 6
+        assert stat.purchase_count == 5
+        assert stat.average_price == 3.49
+
+    def test_create_seasonal_purchase_pattern(self):
+        """Seasonal purchase pattern captures windows and confidence."""
+        pattern = SeasonalPurchasePattern(
+            item_name="Strawberries",
+            sample_size=24,
+            observed_months=6,
+            peak_purchase_months=[6, 7],
+            low_purchase_months=[1, 2],
+            monthly_stats=[
+                SeasonalMonthStat(month=6, purchase_count=8, average_price=2.99),
+                SeasonalMonthStat(month=1, purchase_count=2, average_price=5.99),
+            ],
+            confidence="high",
+        )
+        assert pattern.item_name == "Strawberries"
+        assert pattern.sample_size == 24
+        assert pattern.peak_purchase_months == [6, 7]
+        assert pattern.confidence == "high"
 
 
 class TestPriceHistory:

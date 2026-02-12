@@ -185,6 +185,33 @@ class TestStatsSuggestCommand:
         output = json.loads(result.stdout)
         assert len(output["data"]["suggestions"]) >= 1
 
+    def test_suggest_includes_seasonal_context(self, cli_data_dir, data_store):
+        """Suggest command includes seasonal optimization context when supported."""
+        today = date.today()
+        year = today.year - 1
+
+        for month in (6, 7):
+            for day in (3, 10, 17, 24):
+                data_store.update_price("Strawberries", "Giant", 3.00, date(year, month, day))
+
+        for month in (1, 2):
+            for day in (5, 19):
+                data_store.update_price("Strawberries", "Giant", 6.00, date(year, month, day))
+
+        data_store.update_price("Strawberries", "Giant", 6.80, today)
+
+        result = runner.invoke(app, ["--json", "--data-dir", str(cli_data_dir), "stats", "suggest"])
+        assert result.exit_code == 0
+
+        output = json.loads(result.stdout)
+        seasonal = [
+            s for s in output["data"]["suggestions"] if s["type"] == "seasonal_optimization"
+        ]
+        assert len(seasonal) == 1
+        assert "baseline" in seasonal[0]["data"]
+        assert "current_context" in seasonal[0]["data"]
+        assert "recommendation_reason" in seasonal[0]["data"]
+
 
 class TestStatsRecommendCommand:
     """Tests for grocery stats recommend command."""

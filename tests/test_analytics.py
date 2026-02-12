@@ -437,6 +437,79 @@ class TestSuggestions:
             ordered = [priority_order.get(p, 1) for p in priorities]
             assert ordered == sorted(ordered)
 
+    def test_seasonal_suggestion_with_context(self, analytics, data_store):
+        """Suggests seasonal optimization with baseline and current context."""
+        today = date.today()
+        year = today.year - 1
+
+        for month in (6, 7):
+            for day in (3, 10, 17, 24):
+                data_store.update_price(
+                    "Strawberries",
+                    "Giant",
+                    3.00,
+                    date(year, month, day),
+                )
+
+        for month in (1, 2):
+            for day in (5, 19):
+                data_store.update_price(
+                    "Strawberries",
+                    "Giant",
+                    6.00,
+                    date(year, month, day),
+                )
+
+        data_store.update_price("Strawberries", "Giant", 6.80, today)
+
+        suggestions = analytics.get_suggestions()
+        seasonal = [s for s in suggestions if s.type == "seasonal_optimization"]
+
+        assert len(seasonal) == 1
+        assert seasonal[0].item_name == "Strawberries"
+        assert seasonal[0].priority == "high"
+        assert "baseline" in seasonal[0].data
+        assert "current_context" in seasonal[0].data
+        assert "recommendation_reason" in seasonal[0].data
+        assert seasonal[0].data["baseline"]["average_price"] == 3.0
+        assert seasonal[0].data["current_context"]["latest_observed_price"] == 6.8
+
+
+class TestSeasonalPurchasePattern:
+    """Tests for seasonal purchase pattern analytics."""
+
+    def test_sparse_history_returns_low_confidence(self, analytics, data_store):
+        """Sparse history yields low confidence and no season windows."""
+        today = date.today()
+        data_store.update_price("Mango", "Giant", 2.99, today - timedelta(days=40))
+        data_store.update_price("Mango", "Giant", 3.19, today - timedelta(days=5))
+
+        pattern = analytics.seasonal_purchase_pattern("Mango")
+        assert pattern is not None
+        assert pattern.confidence == "low"
+        assert pattern.peak_purchase_months == []
+        assert pattern.low_purchase_months == []
+
+    def test_identifies_in_season_windows(self, analytics, data_store):
+        """Sufficient history identifies in-season purchase windows."""
+        year = date.today().year - 1
+        seasonal_counts = {1: 2, 2: 2, 3: 2, 6: 8, 7: 8, 8: 2}
+
+        for month, count in seasonal_counts.items():
+            for i in range(count):
+                day = 1 + (i % 28)
+                price = 2.89 if month in {6, 7} else 5.49
+                data_store.update_price("Strawberries", "Giant", price, date(year, month, day))
+
+        pattern = analytics.seasonal_purchase_pattern("Strawberries")
+        assert pattern is not None
+        assert pattern.sample_size == 24
+        assert pattern.observed_months == 6
+        assert pattern.confidence == "high"
+        assert pattern.peak_purchase_months == [6, 7]
+        assert 1 in pattern.low_purchase_months
+        assert len(pattern.monthly_stats) == 6
+
 
 class TestOutOfStock:
     """Tests for out-of-stock recording."""

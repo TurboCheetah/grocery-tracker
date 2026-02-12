@@ -282,6 +282,12 @@ class TestRenderSuggestions:
                         "message": "Out of stock 3 times",
                         "priority": "low",
                     },
+                    {
+                        "type": "seasonal_optimization",
+                        "item_name": "Strawberries",
+                        "message": "Current price is 2.0x seasonal baseline",
+                        "priority": "medium",
+                    },
                 ]
             }
         }
@@ -291,6 +297,7 @@ class TestRenderSuggestions:
         assert "Milk" in output
         assert "Eggs" in output
         assert "Oat Milk" in output
+        assert "Strawberries" in output
 
 
 class TestRenderRecommendation:

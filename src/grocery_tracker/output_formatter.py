@@ -516,9 +516,12 @@ Total: ${receipt["total"]:.2f}{savings_line}""",
         self.console.print("\n[bold]Smart Suggestions[/bold]")
 
         for s in suggestions:
-            icon = {"restock": "\u26a0", "price_alert": "$", "out_of_stock": "\u2717"}.get(
-                s["type"], "\u2022"
-            )
+            icon = {
+                "restock": "\u26a0",
+                "price_alert": "$",
+                "seasonal_optimization": "\u263c",
+                "out_of_stock": "\u2717",
+            }.get(s["type"], "\u2022")
             priority_color = {
                 "high": "red",
                 "medium": "yellow",
