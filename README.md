@@ -25,14 +25,11 @@ uv sync --all-extras
 
 ### Command Shape (Important)
 
-`grocery` has global options. Put them before the command:
+`grocery` has global options: `--json` and `--data-dir`.
 
 ```bash
-# Correct
+# Example
 grocery --json --data-dir ./data list
-
-# Incorrect
-grocery list --json
 ```
 
 Some features are nested subcommands:

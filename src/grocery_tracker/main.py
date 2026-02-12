@@ -20,8 +20,7 @@ app = typer.Typer(
     name="grocery",
     help=(
         "Intelligent grocery list and inventory management.\n\n"
-        "Global options like --json and --data-dir must come before the command "
-        "(for example: grocery --json list)."
+        "Global options: --json and --data-dir."
     ),
     epilog=(
         "Examples:\n"

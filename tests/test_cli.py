@@ -756,7 +756,7 @@ class TestHelpCommand:
         assert result.exit_code == 0
         assert "grocery" in result.stdout.lower()
         assert "add" in result.stdout
-        expected = "Global options like --json and --data-dir must come before the command"
+        expected = "Global options: --json and --data-dir."
         assert expected in result.stdout
 
     def test_add_help(self):
