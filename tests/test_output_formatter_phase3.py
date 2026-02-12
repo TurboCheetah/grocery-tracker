@@ -239,3 +239,83 @@ class TestRenderPreferences:
         assert "Organic Valley" in output
         assert "peanuts" in output
         assert "mango" in output
+
+
+class TestRenderBulkBuyingAnalysis:
+    """Tests for bulk buying rendering."""
+
+    def test_render_bulk_buying(self):
+        """Renders bulk buying comparison and recommendation."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "bulk_buying_analysis": {
+                    "item_name": "Soda",
+                    "comparable": True,
+                    "comparison_status": "ok",
+                    "standard_option": {
+                        "name": "standard",
+                        "quantity": 1,
+                        "unit": "count",
+                        "pack_price": 1.50,
+                        "normalized_quantity": 1.0,
+                        "normalized_unit": "count",
+                        "unit_price": 1.5,
+                    },
+                    "bulk_option": {
+                        "name": "bulk",
+                        "quantity": 12,
+                        "unit": "count",
+                        "pack_price": 14.40,
+                        "normalized_quantity": 12.0,
+                        "normalized_unit": "count",
+                        "unit_price": 1.2,
+                    },
+                    "recommended_option": "bulk",
+                    "break_even_recommendation": "Bulk breaks even after 3 packs.",
+                    "projected_monthly_savings": 6.0,
+                    "assumptions": ["Unit prices are comparable."],
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Bulk Buying Analysis" in output
+        assert "Soda" in output
+        assert "bulk" in output.lower()
+
+
+class TestRenderRecipePayload:
+    """Tests for recipe payload rendering."""
+
+    def test_render_recipe_payload(self):
+        """Renders payload summary and constraints."""
+        fmt = OutputFormatter(json_mode=False)
+        fmt.console = Console(file=StringIO())
+        data = {
+            "data": {
+                "recipe_payload": {
+                    "horizon_days": 3,
+                    "expiring_items": [
+                        {
+                            "item_name": "Milk",
+                            "quantity": 1,
+                            "unit": "carton",
+                            "expiration_date": "2026-02-13",
+                            "days_until_expiration": 1,
+                            "priority_rank": 1,
+                        }
+                    ],
+                    "constraints": {
+                        "dietary_restrictions": ["vegetarian"],
+                        "allergens": ["peanuts"],
+                    },
+                }
+            }
+        }
+        fmt.output(data)
+        output = fmt.console.file.getvalue()
+        assert "Use-It-Up Recipe Payload" in output
+        assert "Milk" in output
+        assert "vegetarian" in output

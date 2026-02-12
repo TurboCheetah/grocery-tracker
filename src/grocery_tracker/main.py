@@ -608,6 +608,50 @@ def stats_savings(
         raise typer.Exit(code=1)
 
 
+@stats_app.command("bulk")
+def stats_bulk(
+    item: Annotated[str, typer.Argument(help="Item name for bulk analysis")],
+    standard_qty: Annotated[float, typer.Option("--standard-qty", help="Standard pack quantity")],
+    standard_price: Annotated[float, typer.Option("--standard-price", help="Standard pack price")],
+    standard_unit: Annotated[
+        str, typer.Option("--standard-unit", help="Standard pack unit (oz, lb, ml, count, ...)")
+    ],
+    bulk_qty: Annotated[float, typer.Option("--bulk-qty", help="Bulk pack quantity")],
+    bulk_price: Annotated[float, typer.Option("--bulk-price", help="Bulk pack price")],
+    bulk_unit: Annotated[
+        str, typer.Option("--bulk-unit", help="Bulk pack unit (oz, lb, ml, count, ...)")
+    ],
+    monthly_usage: Annotated[
+        float | None,
+        typer.Option("--monthly-usage", help="Monthly usage in standard unit"),
+    ] = None,
+) -> None:
+    """Analyze standard vs bulk pack value with break-even and monthly savings."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        analysis = analytics.bulk_buying_analysis(
+            item_name=item,
+            standard_quantity=standard_qty,
+            standard_price=standard_price,
+            standard_unit=standard_unit,
+            bulk_quantity=bulk_qty,
+            bulk_price=bulk_price,
+            bulk_unit=bulk_unit,
+            monthly_usage=monthly_usage,
+        )
+
+        output_data = {
+            "success": True,
+            "data": {
+                "bulk_buying_analysis": analysis.model_dump(),
+            },
+        }
+        formatter.output(output_data, f"Bulk buying analysis for {item}")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
 # Out-of-stock subcommand group
 oos_app = typer.Typer(help="Out-of-stock tracking")
 app.add_typer(oos_app, name="out-of-stock")
@@ -791,6 +835,36 @@ def inv_expiring(
             },
         }
         formatter.output(output_data, f"{len(items)} items expiring within {days} days")
+    except Exception as e:
+        formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@inv_app.command("use-it-up-payload")
+def inv_use_it_up_payload(
+    days: Annotated[
+        int, typer.Option("--days", "-d", help="Days to look ahead for expiration")
+    ] = 3,
+    user: Annotated[
+        str | None,
+        typer.Option("--user", "-u", help="User to scope dietary/allergen constraints"),
+    ] = None,
+) -> None:
+    """Emit structured payload for external recipe/use-it-up skills."""
+    try:
+        analytics = Analytics(data_store=get_data_store())
+        payload = analytics.recipe_use_it_up_payload(days=days, user=user)
+
+        output_data = {
+            "success": True,
+            "data": {
+                "recipe_payload": payload.model_dump(),
+            },
+        }
+        formatter.output(
+            output_data,
+            f"Generated recipe payload with {len(payload.expiring_items)} expiring item(s)",
+        )
     except Exception as e:
         formatter.error(str(e))
         raise typer.Exit(code=1)
