@@ -23,6 +23,36 @@ uv sync --all-extras
 
 ## Usage
 
+### Command Shape (Important)
+
+`grocery` has global options. Put them before the command:
+
+```bash
+# Correct
+grocery --json --data-dir ./data list
+
+# Incorrect
+grocery list --json
+```
+
+Some features are nested subcommands:
+
+```bash
+grocery price history "Milk"
+grocery receipt process --file receipt.json
+```
+
+`stats` works in two ways:
+
+```bash
+# Base command: spending summary
+grocery stats --period monthly
+
+# Subcommands: deeper analytics
+grocery stats suggest
+grocery stats compare "Milk"
+```
+
 ### Add Items
 
 ```bash

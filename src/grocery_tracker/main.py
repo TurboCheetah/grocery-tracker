@@ -18,7 +18,18 @@ from .receipt_processor import ReceiptProcessor
 
 app = typer.Typer(
     name="grocery",
-    help="Intelligent grocery list and inventory management",
+    help=(
+        "Intelligent grocery list and inventory management.\n\n"
+        "Global options like --json and --data-dir must come before the command "
+        "(for example: grocery --json list)."
+    ),
+    epilog=(
+        "Examples:\n"
+        "  grocery --json --data-dir ./data list\n"
+        "  grocery price history Milk\n"
+        "  grocery stats --period monthly\n"
+        "  grocery stats suggest"
+    ),
     no_args_is_help=True,
 )
 
@@ -290,7 +301,7 @@ def clear(
 
 
 # Receipt subcommand group
-receipt_app = typer.Typer(help="Receipt processing commands")
+receipt_app = typer.Typer(help="Receipt processing commands (use: grocery receipt <command>)")
 app.add_typer(receipt_app, name="receipt")
 
 
@@ -369,7 +380,7 @@ def list_receipts() -> None:
 
 
 # Price subcommand group
-price_app = typer.Typer(help="Price history commands")
+price_app = typer.Typer(help="Price history commands (use: grocery price history <item>)")
 app.add_typer(price_app, name="price")
 
 
@@ -414,7 +425,12 @@ def price_history(
 
 
 # Stats subcommand group
-stats_app = typer.Typer(help="Spending analytics and insights")
+stats_app = typer.Typer(
+    help=(
+        "Spending analytics and insights. Run `grocery stats` for a spending summary, "
+        "or use subcommands for deeper analysis."
+    )
+)
 app.add_typer(stats_app, name="stats")
 
 
