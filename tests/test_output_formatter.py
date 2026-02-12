@@ -384,7 +384,11 @@ class TestOutputFormatterRich:
         )
         output = strip_ansi(console.file.getvalue())
         assert "Milk" in output
-        assert "$1.00" not in output
+        milk_row = next(
+            line for line in output.splitlines() if "Milk" in line and "$0.00" in line
+        )
+        assert "$1.00" not in milk_row
+        assert "-" in milk_row
 
     def test_render_price_history(self):
         """Renders price history."""
