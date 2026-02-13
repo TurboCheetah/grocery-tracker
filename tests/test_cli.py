@@ -1,12 +1,37 @@
 """Tests for CLI commands."""
 
 import json
+import re
 
 from typer.testing import CliRunner
 
 from grocery_tracker.main import app
 
 runner = CliRunner()
+
+
+class TestFlexibleGlobalOptions:
+    """Tests for flexible placement of selected global options."""
+
+    def test_list_accepts_trailing_global_flags(self, temp_data_dir):
+        """Allow --json/--data-dir after the subcommand."""
+        runner.invoke(app, ["--json", "--data-dir", str(temp_data_dir), "add", "Milk"])
+
+        result = runner.invoke(app, ["list", "--json", "--data-dir", str(temp_data_dir)])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["success"] is True
+        assert data["data"]["list"]["total_items"] == 1
+
+    def test_list_accepts_data_dir_equals_form(self, temp_data_dir):
+        """Allow --data-dir=<path> form after the subcommand."""
+        runner.invoke(app, ["--json", "--data-dir", str(temp_data_dir), "add", "Milk"])
+
+        result = runner.invoke(app, ["list", f"--data-dir={temp_data_dir}", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["success"] is True
+        assert data["data"]["list"]["total_items"] == 1
 
 
 class TestAddCommand:
@@ -756,6 +781,9 @@ class TestHelpCommand:
         assert result.exit_code == 0
         assert "grocery" in result.stdout.lower()
         assert "add" in result.stdout
+        expected = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+        assert re.search(r"\B--?json\b", expected)
+        assert re.search(r"\B--?data-dir\b", expected)
 
     def test_add_help(self):
         """Add command help."""
