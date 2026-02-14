@@ -41,6 +41,23 @@ grocery stats suggest
 grocery stats compare "Milk"
 ```
 
+### Interactive TUI
+
+```bash
+grocery tui
+```
+
+Keyboard shortcuts inside the TUI:
+
+- `a` add grocery list item
+- `i` add inventory item
+- `e` edit selected item
+- `b` mark selected grocery item as bought
+- `x` remove selected row
+- `u` consume one unit from selected inventory item
+- `r` refresh tables
+- `q` quit
+
 ### Add Items
 
 ```bash

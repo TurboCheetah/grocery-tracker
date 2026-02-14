@@ -122,6 +122,63 @@ class InventoryManager:
 
         raise ValueError(f"Inventory item not found: {item_id}")
 
+    def update_item(
+        self,
+        item_id: str | UUID,
+        item_name: str | None = None,
+        quantity: float | None = None,
+        unit: str | None = None,
+        category: str | None = None,
+        location: InventoryLocation | None = None,
+        expiration_date: date | None = None,
+        low_stock_threshold: float | None = None,
+        treat_none_as_unset: bool = True,
+    ) -> InventoryItem:
+        """Update editable inventory fields.
+
+        Args:
+            item_id: UUID of item
+            item_name: New item name
+            quantity: New quantity
+            unit: New unit (None clears if treat_none_as_unset is False)
+            category: New category
+            location: New storage location
+            expiration_date: New expiration date (None clears if treat_none_as_unset is False)
+            low_stock_threshold: New low-stock threshold
+            treat_none_as_unset: When True, None means "leave unchanged"
+
+        Returns:
+            Updated item
+
+        Raises:
+            ValueError: If item not found
+        """
+        if isinstance(item_id, str):
+            item_id = UUID(item_id)
+
+        inventory = self.data_store.load_inventory()
+        for item in inventory:
+            if item.id == item_id:
+                if item_name is not None:
+                    item.item_name = item_name
+                if quantity is not None:
+                    item.quantity = quantity
+                if unit is not None or not treat_none_as_unset:
+                    item.unit = unit
+                if category is not None:
+                    item.category = category
+                if location is not None:
+                    item.location = location
+                if expiration_date is not None or not treat_none_as_unset:
+                    item.expiration_date = expiration_date
+                if low_stock_threshold is not None:
+                    item.low_stock_threshold = low_stock_threshold
+
+                self.data_store.save_inventory(inventory)
+                return item
+
+        raise ValueError(f"Inventory item not found: {item_id}")
+
     def get_inventory(
         self,
         location: InventoryLocation | None = None,

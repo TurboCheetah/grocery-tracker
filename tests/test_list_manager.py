@@ -341,3 +341,58 @@ class TestUpdateItemFields:
 
         result = list_manager.update_item(item_id, category="Dairy & Eggs")
         assert result["data"]["item"]["category"] == "Dairy & Eggs"
+
+    def test_update_none_is_ignored_by_default(self, list_manager):
+        """None values are ignored in normal CLI-style updates."""
+        result = list_manager.add_item(
+            name="Milk",
+            store="Giant",
+            unit="gallon",
+            brand_preference="Horizon",
+            estimated_price=5.99,
+            notes="Whole milk",
+        )
+        item_id = result["data"]["item"]["id"]
+
+        result = list_manager.update_item(
+            item_id,
+            store=None,
+            unit=None,
+            brand_preference=None,
+            estimated_price=None,
+            notes=None,
+        )
+        item = result["data"]["item"]
+        assert item["store"] == "Giant"
+        assert item["unit"] == "gallon"
+        assert item["brand_preference"] == "Horizon"
+        assert item["estimated_price"] == 5.99
+        assert item["notes"] == "Whole milk"
+
+    def test_update_can_clear_optional_fields_for_tui(self, list_manager):
+        """TUI mode can explicitly clear nullable fields."""
+        result = list_manager.add_item(
+            name="Milk",
+            store="Giant",
+            unit="gallon",
+            brand_preference="Horizon",
+            estimated_price=5.99,
+            notes="Whole milk",
+        )
+        item_id = result["data"]["item"]["id"]
+
+        result = list_manager.update_item(
+            item_id,
+            store=None,
+            unit=None,
+            brand_preference=None,
+            estimated_price=None,
+            notes=None,
+            treat_none_as_unset=False,
+        )
+        item = result["data"]["item"]
+        assert item["store"] is None
+        assert item["unit"] is None
+        assert item["brand_preference"] is None
+        assert item["estimated_price"] is None
+        assert item["notes"] is None

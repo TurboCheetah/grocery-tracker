@@ -115,6 +115,59 @@ class TestUpdateQuantity:
             inv_manager.update_quantity("00000000-0000-0000-0000-000000000000", quantity=1.0)
 
 
+class TestUpdateItem:
+    """Tests for editing inventory fields."""
+
+    def test_update_item_fields(self, inv_manager):
+        """Update editable inventory fields."""
+        item = inv_manager.add_item(
+            item_name="Milk",
+            quantity=1.0,
+            unit="cup",
+            category="Dairy & Eggs",
+            location=InventoryLocation.FRIDGE,
+            low_stock_threshold=2.0,
+        )
+        exp = date.today() + timedelta(days=4)
+
+        updated = inv_manager.update_item(
+            str(item.id),
+            item_name="Whole Milk",
+            quantity=2.5,
+            unit="liter",
+            category="Dairy",
+            location=InventoryLocation.PANTRY,
+            expiration_date=exp,
+            low_stock_threshold=1.0,
+        )
+        assert updated.item_name == "Whole Milk"
+        assert updated.quantity == 2.5
+        assert updated.unit == "liter"
+        assert updated.category == "Dairy"
+        assert updated.location == InventoryLocation.PANTRY
+        assert updated.expiration_date == exp
+        assert updated.low_stock_threshold == 1.0
+
+    def test_update_item_can_clear_nullable_fields(self, inv_manager):
+        """Can clear nullable fields for TUI edits."""
+        exp = date.today() + timedelta(days=4)
+        item = inv_manager.add_item(item_name="Milk", unit="cup", expiration_date=exp)
+
+        updated = inv_manager.update_item(
+            str(item.id),
+            unit=None,
+            expiration_date=None,
+            treat_none_as_unset=False,
+        )
+        assert updated.unit is None
+        assert updated.expiration_date is None
+
+    def test_update_item_not_found(self, inv_manager):
+        """Raises ValueError for unknown ID."""
+        with pytest.raises(ValueError, match="Inventory item not found"):
+            inv_manager.update_item("00000000-0000-0000-0000-000000000000", item_name="Eggs")
+
+
 class TestGetInventory:
     """Tests for listing inventory."""
 

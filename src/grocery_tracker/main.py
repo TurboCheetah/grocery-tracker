@@ -16,6 +16,7 @@ from .list_manager import DuplicateItemError, ItemNotFoundError, ListManager
 from .models import InventoryLocation, ItemStatus, Priority, WasteReason
 from .output_formatter import OutputFormatter
 from .receipt_processor import ReceiptProcessor
+from .tui import GroceryTrackerTUI
 
 
 class FlexibleGlobalOptionGroup(TyperGroup):
@@ -334,6 +335,24 @@ def clear(
         raise
     except Exception as e:
         formatter.error(str(e))
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def tui() -> None:
+    """Launch the interactive terminal UI."""
+    if formatter.json_mode:
+        formatter.error("TUI is not available when --json is set", error_code="UNSUPPORTED_MODE")
+        raise typer.Exit(code=1)
+
+    try:
+        app_tui = GroceryTrackerTUI(
+            list_manager=get_list_manager(),
+            inventory_manager=get_inventory_manager(),
+        )
+        app_tui.run()
+    except Exception as e:
+        formatter.error(f"Failed to launch TUI: {e}")
         raise typer.Exit(code=1)
 
 

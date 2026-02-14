@@ -249,12 +249,14 @@ class ListManager:
         priority: Priority | None = None,
         notes: str | None = None,
         status: ItemStatus | None = None,
+        treat_none_as_unset: bool = True,
     ) -> dict:
         """Update an existing item.
 
         Args:
             item_id: ID of item to update
-            **kwargs: Fields to update
+            treat_none_as_unset: When True, None means "do not change field".
+                When False, None is applied (used by TUI editing to clear fields).
 
         Returns:
             Dict with success status
@@ -273,19 +275,19 @@ class ListManager:
                     item.name = name
                 if quantity is not None:
                     item.quantity = quantity
-                if store is not None:
+                if store is not None or not treat_none_as_unset:
                     item.store = store
                 if category is not None:
                     item.category = category
-                if unit is not None:
+                if unit is not None or not treat_none_as_unset:
                     item.unit = unit
-                if brand_preference is not None:
+                if brand_preference is not None or not treat_none_as_unset:
                     item.brand_preference = brand_preference
-                if estimated_price is not None:
+                if estimated_price is not None or not treat_none_as_unset:
                     item.estimated_price = estimated_price
                 if priority is not None:
                     item.priority = priority
-                if notes is not None:
+                if notes is not None or not treat_none_as_unset:
                     item.notes = notes
                 if status is not None:
                     item.status = status

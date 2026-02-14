@@ -4,6 +4,7 @@ import json
 
 from typer.testing import CliRunner
 
+import grocery_tracker.main as main_module
 from grocery_tracker.main import app
 
 runner = CliRunner()
@@ -918,3 +919,48 @@ class TestGenericExceptionHandling:
         assert result.exit_code == 1
         data = json.loads(result.stdout)
         assert "price boom" in data["error"]
+
+
+class TestTUICommand:
+    """Tests for tui command."""
+
+    def test_tui_rejects_json_mode(self, temp_data_dir):
+        """TUI command fails in JSON mode."""
+        result = runner.invoke(app, ["--json", "--data-dir", str(temp_data_dir), "tui"])
+        assert result.exit_code == 1
+        data = json.loads(result.stdout)
+        assert data["success"] is False
+        assert data["error_code"] == "UNSUPPORTED_MODE"
+
+    def test_tui_launches_textual_app(self, temp_data_dir, monkeypatch):
+        """TUI command launches app in Rich mode."""
+        called: dict[str, bool] = {"ran": False}
+
+        class DummyTUI:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def run(self) -> None:
+                called["ran"] = True
+
+        monkeypatch.setattr(main_module, "GroceryTrackerTUI", DummyTUI)
+
+        result = runner.invoke(app, ["--data-dir", str(temp_data_dir), "tui"])
+        assert result.exit_code == 0
+        assert called["ran"] is True
+
+    def test_tui_surfaces_launch_errors(self, temp_data_dir, monkeypatch):
+        """TUI command handles launch errors."""
+
+        class BrokenTUI:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def run(self) -> None:
+                raise RuntimeError("tui boom")
+
+        monkeypatch.setattr(main_module, "GroceryTrackerTUI", BrokenTUI)
+
+        result = runner.invoke(app, ["--data-dir", str(temp_data_dir), "tui"])
+        assert result.exit_code == 1
+        assert "tui boom" in result.stdout
