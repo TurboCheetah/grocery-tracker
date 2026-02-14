@@ -23,29 +23,20 @@ uv sync --all-extras
 
 ## Usage
 
-### Command Shape (Important)
+### Command Layout
 
-`grocery` has global options: `--json` and `--data-dir`.
+Global options go before the command:
 
 ```bash
-# Example
 grocery --json --data-dir ./data list
 ```
 
-Some features are nested subcommands:
+Nested commands:
 
 ```bash
 grocery price history "Milk"
 grocery receipt process --file receipt.json
-```
-
-`stats` works in two ways:
-
-```bash
-# Base command: spending summary
 grocery stats --period monthly
-
-# Subcommands: deeper analytics
 grocery stats suggest
 grocery stats compare "Milk"
 ```

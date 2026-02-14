@@ -9,6 +9,8 @@ from grocery_tracker.main import app
 
 runner = CliRunner()
 
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
 
 class TestFlexibleGlobalOptions:
     """Tests for flexible placement of selected global options."""
@@ -778,12 +780,12 @@ class TestHelpCommand:
     def test_main_help(self):
         """Main help output."""
         result = runner.invoke(app, ["--help"])
+        output = ANSI_ESCAPE_RE.sub("", result.stdout)
         assert result.exit_code == 0
-        assert "grocery" in result.stdout.lower()
-        assert "add" in result.stdout
-        expected = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
-        assert re.search(r"\B--?json\b", expected)
-        assert re.search(r"\B--?data-dir\b", expected)
+        assert "grocery" in output.lower()
+        assert "add" in output
+        assert "--json" in output
+        assert "--data-dir" in output
 
     def test_add_help(self):
         """Add command help."""

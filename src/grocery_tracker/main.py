@@ -22,8 +22,7 @@ class FlexibleGlobalOptionGroup(TyperGroup):
     """Allow selected global options to appear after subcommands."""
 
     def parse_args(self, ctx: typer.Context, args: list[str]) -> list[str]:
-        normalized = self._normalize_selected_globals(args)
-        return super().parse_args(ctx, normalized)
+        return super().parse_args(ctx, self._normalize_selected_globals(args))
 
     @staticmethod
     def _normalize_selected_globals(args: list[str]) -> list[str]:
@@ -44,12 +43,13 @@ class FlexibleGlobalOptionGroup(TyperGroup):
                 continue
 
             if token == "--data-dir":
-                global_args.append(token)
-                if i + 1 < len(args):
-                    global_args.append(args[i + 1])
-                    i += 2
-                else:
+                if i + 1 >= len(args):
+                    passthrough_args.append(token)
                     i += 1
+                    continue
+                global_args.append(token)
+                global_args.append(args[i + 1])
+                i += 2
                 continue
 
             if token.startswith("--data-dir="):
@@ -66,17 +66,7 @@ class FlexibleGlobalOptionGroup(TyperGroup):
 app = typer.Typer(
     name="grocery",
     cls=FlexibleGlobalOptionGroup,
-    help=(
-        "Intelligent grocery list and inventory management.\n\n"
-        "Global options: --json and --data-dir."
-    ),
-    epilog=(
-        "Examples:\n"
-        "  grocery --json --data-dir ./data list\n"
-        "  grocery price history Milk\n"
-        "  grocery stats --period monthly\n"
-        "  grocery stats suggest"
-    ),
+    help="Intelligent grocery list and inventory management",
     no_args_is_help=True,
 )
 
@@ -348,7 +338,7 @@ def clear(
 
 
 # Receipt subcommand group
-receipt_app = typer.Typer(help="Receipt processing commands (use: grocery receipt <command>)")
+receipt_app = typer.Typer(help="Receipt processing commands")
 app.add_typer(receipt_app, name="receipt")
 
 
@@ -427,7 +417,7 @@ def list_receipts() -> None:
 
 
 # Price subcommand group
-price_app = typer.Typer(help="Price history commands (use: grocery price history <item>)")
+price_app = typer.Typer(help="Price history commands")
 app.add_typer(price_app, name="price")
 
 
@@ -472,12 +462,7 @@ def price_history(
 
 
 # Stats subcommand group
-stats_app = typer.Typer(
-    help=(
-        "Spending analytics and insights. Run `grocery stats` for a spending summary, "
-        "or use subcommands for deeper analysis."
-    )
-)
+stats_app = typer.Typer(help="Spending analytics and insights")
 app.add_typer(stats_app, name="stats")
 
 
